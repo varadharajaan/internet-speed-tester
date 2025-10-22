@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2025-10-22T00:00:00</Date>
+    <Author>vd-speed-test</Author>
+    <Description>Run Internet Speed Collector every 15 minutes</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <!-- Run every 15 minutes indefinitely -->
+    <CalendarTrigger>
+      <StartBoundary>2025-10-22T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+      <Repetition>
+        <Interval>PT15M</Interval>
+        <Duration>P1D</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <!-- Run with your account; Highest privileges ensures network/S3 access -->
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>pythonw.exe</Command>
+      <Arguments>"C:\Users\varad\Downloads\Compressed\vd-speed-test-final-plus-threshold\speed_collector.py"</Arguments>
+      <WorkingDirectory>C:\Users\varad\Downloads\Compressed\vd-speed-test-final-plus-threshold</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Internet Speed Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 2rem;
+      background: #f8fafc;
+      color: #111827;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 1rem 1.2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .anomaly { color: #b91c1c; font-weight: 600; }
+    .bad { color: #b91c1c; font-weight: 700; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th { background: #f3f4f6; text-align: left; }
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="number"], select, button {
+      padding: 0.4rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+    }
+    code.small { font-size: 12px; color: #374151; }
+    ul.links { margin: 0; padding-left: 1.1rem; }
+    ul.links li { margin: 0.2rem 0; }
+    canvas { height: 400px !important; }
+    .chart-toolbar { margin: 0.8rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Internet Speed Overview</h1>
+    <form class="toolbar" method="GET">
+      <label for="days">Period:</label>
+      <select id="days" name="days">
+        {% for d in [1,7,14,30,60,90,180,360] %}
+          <option value="{{ d }}" {% if d == days %}selected{% endif %}>Last {{ d }} days</option>
+        {% endfor %}
+      </select>
+      <label for="mode">Mode:</label>
+      <select id="mode" name="mode">
+        <option value="daily" {% if mode != 'minute' %}selected{% endif %}>Daily</option>
+        <option value="minute" {% if mode == 'minute' %}selected{% endif %}>15-min</option>
+      </select>
+      <label><input type="checkbox" id="urls" name="urls" value="yes" {% if show_urls %}checked{% endif %}> Show URLs</label>
+      <label for="threshold">Expected Speed (Mbps):</label>
+      <input type="number" id="threshold" name="threshold" step="1" min="1"
+             value="{{ threshold or default_threshold }}" style="width:110px;">
+      <button type="submit">Apply</button>
+    </form>
+  </header>
+
+  {% if summary and data|length > 0 %}
+  <section class="cards">
+    <div class="card">
+      <div>Average Download</div>
+      <div style="font-size:24px;font-weight:700">{{ summary.avg_download }} Mbps</div>
+    </div>
+    <div class="card">
+      <div>Average Upload</div>
+      <div style="font-size:24px;font-weight:700">{{ summary.avg_upload }} Mbps</div>
+    </div>
+    <div class="card">
+      <div>Average Ping</div>
+      <div style="font-size:24px;font-weight:700">{{ summary.avg_ping }} ms</div>
+    </div>
+    <div class="card">
+      <div>Days Below Expected Speed</div>
+      <div style="font-size:24px;font-weight:700">{{ summary.below_expected }} / {{ summary.total_days }}</div>
+      <div><code class="small">Threshold: {{ threshold }} Mbps</code></div>
+    </div>
+    <div class="card" style="grid-column: span 2;">
+      <div>Most Used Server (period)</div>
+      <div style="font-size:16px;font-weight:700">{{ summary.top_server_over_period }}</div>
+      <div><code class="small">Format: Name – Host – City (Country)</code></div>
+    </div>
+    <div class="card">
+      <div>Public IP(s) Observed</div>
+      {% if summary.public_ips %}
+        {% for ip in summary.public_ips %}
+          <div style="font-size:18px;font-weight:700">{{ ip }}</div>
+        {% endfor %}
+      {% elif data|length > 0 %}
+        <div style="font-size:18px;font-weight:700">{{ data[-1].public_ip }}</div>
+      {% else %}
+        <div>N/A</div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="card">
+    <canvas id="speedChart"></canvas>
+    <div class="chart-toolbar">
+      <button id="toggleLabels" style="padding:0.3rem 0.6rem;">Toggle Label View</button>
+      <button id="resetZoom" style="padding:0.3rem 0.6rem;">Reset Zoom</button>
+    </div>
+  </div>
+
+  <h2 style="margin-top: 1.5rem;">{{ 'Minute' if mode=='minute' else 'Daily' }} Details</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ 'Timestamp (IST)' if mode=='minute' else 'Date' }}</th>
+        <th>Download (Mbps)</th>
+        <th>Upload (Mbps)</th>
+        <th>Ping (ms)</th>
+        <th>Server</th>
+        <th>Public IP</th>
+        {% if show_urls %}<th>Result URLs</th>{% endif %}
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data %}
+      <tr>
+        <td>{{ row.date_ist_str }}</td>
+        <td class="{% if row.below_expected %}bad{% endif %}">{{ '%.2f'|format(row.download_avg or 0) }}</td>
+        <td>{{ '%.2f'|format(row.upload_avg or 0) }}</td>
+        <td>{{ '%.2f'|format(row.ping_avg or 0) }}</td>
+        <td>{{ row.top_server }}</td>
+        <td>{{ row.public_ip }}</td>
+        {% if show_urls %}
+        <td>
+          {% if row.result_urls and row.result_urls|length > 0 %}
+            <ul class="links">
+              {% for u in row.result_urls %}
+                <li><a href="{{ u }}" target="_blank" rel="noopener">View</a></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <em>—</em>
+          {% endif %}
+        </td>
+        {% endif %}
+        <td>
+          {% if row.below_expected %}<span class="anomaly">⚠️ Below {{ threshold }} Mbps</span>{% endif %}
+          {% if row.download_anomaly %}<span class="anomaly">⚠️ Performance Drop</span>{% endif %}
+          {% if row.ping_anomaly %}<span class="anomaly">⚠️ Latency Spike</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    window.onload = () => {
+    const threshold = {{ threshold|tojson }};
+    const data = {{ data|tojson }};
+    const labels = data.map(d => d.date_ist_str);
+    const downloads = data.map(d => d.download_avg);
+    const uploads = data.map(d => d.upload_avg);
+    const pings = data.map(d => d.ping_avg);
+    const belowMask = data.map(d => d.below_expected);
+    const pointColors = belowMask.map(b => b ? 'red' : undefined);
+
+    // Format helpers on the *raw label string*
+    function formatShort(raw) {
+        try {
+        const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
+        return d.toTimeString().slice(0,5); // HH:MM
+        } catch { return raw; }
+    }
+    function formatFull(raw) {
+        try {
+        const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
+        return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+        } catch { return raw; }
+    }
+
+    // Tick callback functions MUST be normal functions (not arrows) to have 'this'
+    function tickShort(value /*, index, ticks */) {
+        const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
+        return formatShort(raw);
+    }
+    function tickFull(value /*, index, ticks */) {
+        const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
+        return formatFull(raw);
+    }
+
+    const thresholdLine = {
+        id: 'thresholdLine',
+        afterDraw(chart) {
+        const {ctx, chartArea: {left, right}, scales: {y}} = chart;
+        if (!y) return;
+        const yValue = y.getPixelForValue(threshold);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(left, yValue);
+        ctx.lineTo(right, yValue);
+        ctx.setLineDash([6,4]);
+        ctx.strokeStyle = 'red';
+        ctx.stroke();
+        ctx.fillStyle = 'red';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`Threshold: ${threshold} Mbps`, right - 160, yValue - 6);
+        ctx.restore();
+        }
+    };
+
+    const ctx = document.getElementById('speedChart');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+        labels,
+        datasets: [
+            { label: 'Download (Mbps)', data: downloads, borderWidth: 1.5, fill: false, pointRadius: 1.5, pointBackgroundColor: pointColors },
+            { label: 'Upload (Mbps)', data: uploads, borderWidth: 1.5, fill: false, pointRadius: 1.5 },
+            { label: 'Ping (ms)', data: pings, borderWidth: 1.5, fill: false, pointRadius: 1.5, yAxisID: 'y1' }
+        ]
+        },
+        options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            tooltip: {
+            callbacks: {
+                title: (items) => {
+                const raw = items[0].label;
+                return formatFull(raw);
+                }
+            }
+            },
+            zoom: {
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+            pan: { enabled: true, mode: 'x' }
+            },
+            legend: { position: 'top' }
+        },
+        scales: {
+            x: {
+            ticks: {
+                autoSkip: false,
+                font: { size: 8 },
+                callback: tickShort
+            },
+            title: { display: true, text: 'Time (IST)' }
+            },
+            y: { beginAtZero: true, title: { display: true, text: 'Speed (Mbps)' } },
+            y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Ping (ms)' } }
+        }
+        },
+        plugins: [thresholdLine]
+    });
+
+    // Buttons
+    const toggleBtn = document.getElementById('toggleLabels');
+    const resetBtn = document.getElementById('resetZoom');
+
+    if (toggleBtn) {
+        let compact = true;
+        toggleBtn.addEventListener('click', () => {
+        compact = !compact;
+        chart.options.scales.x.ticks.callback = compact ? tickShort : tickFull;
+        chart.update();
+        });
+    }
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => chart.resetZoom && chart.resetZoom());
+    }
+    };
+</script>
+
+</body>
+</html>
