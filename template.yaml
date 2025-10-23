@@ -2,39 +2,96 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: vd-speed-test — Aggregator + Dashboard + Hourly Checker deployment
 
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Default: vd-speed-test
+    Description: S3 bucket name for speed test data
+  
+  DailyScheduleExpression:
+    Type: String
+    Default: cron(30 0 * * ? *)
+    Description: Cron expression for daily aggregation (00:30 AM UTC)
+  
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Environment name
+
+
 Globals:
   Function:
     Timeout: 300
     MemorySize: 512
     Runtime: python3.12
     Architectures: [x86_64]
+    Environment:
+      Variables:
+        S3_BUCKET: !Ref S3BucketName
+        ENVIRONMENT: !Ref Environment
+        AWS_REGION1: ap-south-1
+    LoggingConfig:
+      LogFormat: JSON
+      ApplicationLogLevel: INFO
+      SystemLogLevel: INFO
+    Tags:
+      Application: vd-speed-test
+      ManagedBy: SAM
+
 
 Resources:
   # --- Daily Aggregator Lambda ---
   VdSpeedTestAggregator:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: vd-speedtest-daily-aggregator
+      FunctionName: !Sub 'vd-speedtest-daily-aggregator-${Environment}'
       Handler: lambda_function.lambda_handler
       CodeUri: ./
       Description: Aggregates daily speed test data
       Policies:
-        - S3FullAccessPolicy:
-            BucketName: vd-speed-test
+        - S3CrudPolicy:
+            BucketName: !Ref S3BucketName
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: [GET, POST]
+          AllowHeaders: ['*']
+      EventInvokeConfig:
+        MaximumRetryAttempts: 1
+    Metadata:
+      BuildMethod: python3.12
+
+
+  AggregatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/vd-speedtest-daily-aggregator-${Environment}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
 
   # --- EventBridge Daily Schedule ---
   DailyAggregationSchedule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: cron(30 0 * * ? *)  # At 00:30 AM UTC daily
+      Name: !Sub 'vd-speedtest-daily-schedule-${Environment}'
+      Description: Trigger daily aggregation at 6:00 AM IST (00:30 UTC)
+      ScheduleExpression: !Ref DailyScheduleExpression
+      State: ENABLED
       Targets:
         - Arn: !GetAtt VdSpeedTestAggregator.Arn
           Id: LambdaTarget
-    DependsOn: VdSpeedTestAggregator
+          RetryPolicy:
+            MaximumRetryAttempts: 2
 
-  # --- Permission for EventBridge to trigger Aggregator ---
+
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
     Properties:
@@ -43,64 +100,251 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DailyAggregationSchedule.Arn
 
-  # --- Flask Dashboard Lambda (Mangum-based) ---
+
+  # --- Flask Dashboard Lambda ---
   VdSpeedTestDashboard:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: vd-speedtest-dashboard
+      FunctionName: !Sub 'vd-speedtest-dashboard-${Environment}'
       Handler: lambda_dashboard.lambda_handler
       CodeUri: ./
       Description: Flask dashboard for vd-speed-test
+      Timeout: 30
+      MemorySize: 1024
       Environment:
         Variables:
-          S3_BUCKET: vd-speed-test
+          FLASK_ENV: production
           AWS_REGION1: ap-south-1
+          S3_BUCKET: !Ref S3BucketName
+          ENVIRONMENT: !Ref Environment
       Policies:
         - S3ReadPolicy:
-            BucketName: vd-speed-test
+            BucketName: !Ref S3BucketName
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: [GET]
+          AllowHeaders: ['*']
+          MaxAge: 300
+      EventInvokeConfig:
+        MaximumRetryAttempts: 0
+    Metadata:
+      BuildMethod: python3.12
+
+
+  DashboardLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/vd-speedtest-dashboard-${Environment}'
+      RetentionInDays: 7
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
 
   # --- Hourly Checker Lambda ---
   VdSpeedTestHourlyChecker:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: vd-speedtest-hourly-checker
+      FunctionName: !Sub 'vd-speedtest-hourly-checker-${Environment}'
       Handler: lambda_hourly_check.lambda_handler
       CodeUri: ./
       Description: Return hourly/minute folder count for a given date
+      Timeout: 60
+      MemorySize: 256
       Environment:
         Variables:
-          S3_BUCKET: vd-speed-test
           AWS_REGION1: ap-south-1
+          S3_BUCKET: !Ref S3BucketName
+          ENVIRONMENT: !Ref Environment
       Policies:
         - S3ReadPolicy:
-            BucketName: vd-speed-test
+            BucketName: !Ref S3BucketName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
       FunctionUrlConfig:
         AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: [GET, POST]
+          AllowHeaders: ['*']
+      EventInvokeConfig:
+        MaximumRetryAttempts: 1
+    Metadata:
+      BuildMethod: python3.12
+
+
+  HourlyCheckerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/vd-speedtest-hourly-checker-${Environment}'
+      RetentionInDays: 7
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
+
+  # --- Metric Filters (auto metrics from logs) ---
+  AggregatorAnomalyMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '"ERROR" OR "WARNING"'
+      MetricTransformations:
+        - MetricName: AnomalyCount
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+
+
+  HourlyCheckerMissingMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref HourlyCheckerLogGroup
+      FilterPattern: '"missing" OR "not found" OR "delayed"'
+      MetricTransformations:
+        - MetricName: MissingFileCount
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: "1"
+
+
+  DashboardErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DashboardLogGroup
+      FilterPattern: '"ERROR" OR "Traceback"'
+      MetricTransformations:
+        - MetricName: HttpErrorCount
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: "1"
+
+
+  # --- Saved CloudWatch Logs Insights Queries ---
+  AggregatorAnomalyQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest/Aggregator Warnings and Anomalies (${Environment})'
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
+      QueryString: |
+        fields @timestamp, @message
+        | filter level in ["ERROR","WARNING"] or message like /Below|Performance Drop|Latency Spike/
+        | sort @timestamp desc
+        | limit 100
+
+  HourlyCheckerMissingFilesQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest/Hourly Checker Missing Files (${Environment})'
+      LogGroupNames:
+        - !Ref HourlyCheckerLogGroup
+      QueryString: |
+        fields @timestamp, @message
+        | filter @message like /missing|not found|delayed|No data|zero files/
+        | sort @timestamp desc
+        | limit 100
+
+
+  DashboardErrorsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest/Dashboard Errors (${Environment})'
+      LogGroupNames:
+        - !Ref DashboardLogGroup
+      QueryString: |
+        fields @timestamp, @message
+        | filter @message like /ERROR|Traceback|Exception|flask/
+        | sort @timestamp desc
+        | limit 100
+
+
+  AllFunctionsErrorsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest/All Functions Errors (${Environment})'
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
+        - !Ref DashboardLogGroup
+        - !Ref HourlyCheckerLogGroup
+      QueryString: |
+        fields @timestamp, @log, @message
+        | filter @message like /ERROR|Below|Performance Drop|Latency Spike|missing|not found|delayed|No data|zero files/
+        | sort @timestamp desc
+        | limit 200
+
+
+  AggregatorPerformanceQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest/Aggregator Performance (${Environment})'
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
+      QueryString: |
+        fields @timestamp, @duration, @billedDuration, @memorySize, @maxMemoryUsed
+        | stats avg(@duration), max(@duration), min(@duration), avg(@maxMemoryUsed) by bin(1h)
+
 
 Outputs:
   AggregatorFunctionUrl:
-    Description: "URL for Daily Aggregator Function"
+    Description: URL for Daily Aggregator Function
     Value: !GetAtt VdSpeedTestAggregatorUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-AggregatorUrl'
+
 
   DashboardFunctionUrl:
-    Description: "URL for Dashboard Function"
+    Description: URL for Dashboard Function
     Value: !GetAtt VdSpeedTestDashboardUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardUrl'
+
 
   HourlyCheckerFunctionUrl:
-    Description: "URL for Hourly Checker Function"
+    Description: URL for Hourly Checker Function
     Value: !GetAtt VdSpeedTestHourlyCheckerUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-CheckerUrl'
 
 
-# deployment commands:
-# sam build
-# sam deploy --guided
-# sam deploy --config-file samconfig.toml
-# sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
-# sam logs -n vd-speedtest-daily-aggregator --stack-name vd-speedtest-stack --tail
-# sam logs -n vd-speedtest-dashboard --stack-name vd-speedtest-stack --tail
-# sam logs -n vd-speedtest-hourly-checker --stack-name vd-speedtest-stack --tail
-# aws lambda invoke --function-name vd-speedtest-daily-aggregator out.json
-# aws lambda invoke --function-name vd-speedtest-dashboard out.json
-# aws lambda invoke --function-name vd-speedtest-hourly-checker out.json
+  CloudWatchLogsInsightsConsole:
+    Description: Open CloudWatch Logs Insights to see saved queries
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:logs-insights'
+
+
+  AggregatorLogGroupName:
+    Description: Log group name for Aggregator function
+    Value: !Ref AggregatorLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AggregatorLogGroup'
+
+
+  DashboardLogGroupName:
+    Description: Log group name for Dashboard function
+    Value: !Ref DashboardLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardLogGroup'
+
+
+  HourlyCheckerLogGroupName:
+    Description: Log group name for Hourly Checker function
+    Value: !Ref HourlyCheckerLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CheckerLogGroup'
+
+# Deployment commands:
+# sam validate
+# sam build --use-container
+# sam deploy --guided --parameter-overrides Environment=prod
+# sam deploy --config-file samconfig.toml --no-confirm-changeset
+# sam logs -n vd-speedtest-daily-aggregator-prod --stack-name vd-speedtest-stack --tail
+# sam logs -n vd-speedtest-dashboard-prod --stack-name vd-speedtest-stack --tail
+# sam logs -n vd-speedtest-hourly-checker-prod --stack-name vd-speedtest-stack --tail
+# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod out.json
+# aws cloudformation describe-stacks --stack-name vd-speedtest-stack --query 'Stacks[0].Outputs'

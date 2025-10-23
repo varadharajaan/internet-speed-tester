@@ -1,55 +1,132 @@
 #!/usr/bin/env python3
+"""
+vd-speed-test hourly coverage Lambda
+------------------------------------
+Summarizes how many minute-level internet speed test records
+exist per hour for a given date (?date=YYYY-MM-DD).
+"""
+
 import boto3
 import json
 import datetime
-import urllib.parse
 import os
+import sys
+import logging
+from functools import wraps
+from logging.handlers import RotatingFileHandler
 
+# --- Configuration ------------------------------------------------------------
 S3_BUCKET = os.environ.get("S3_BUCKET", "vd-speed-test")
 AWS_REGION1 = "ap-south-1"
+LOG_FILE_PATH = os.path.join(os.getcwd(), "hourly_summary.log")
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
+LOG_BACKUP_COUNT = 5
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
+
 s3 = boto3.client("s3", region_name=AWS_REGION1)
 
+# --- Custom JSON Logger -------------------------------------------------------
+class CustomLogger:
+    def __init__(self, name=__name__, level=LOG_LEVEL):
+        self.logger = logging.getLogger(name)
+        if not self.logger.handlers:
+            formatter = self.JsonFormatter()
+
+            # CloudWatch logs (stdout)
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
+
+            # Local file rotation (only for local runs)
+            if not self.is_lambda_environment():
+                file_handler = RotatingFileHandler(
+                    LOG_FILE_PATH,
+                    maxBytes=LOG_MAX_BYTES,
+                    backupCount=LOG_BACKUP_COUNT,
+                    encoding="utf-8"
+                )
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+
+        self.logger.setLevel(level)
+
+    class JsonFormatter(logging.Formatter):
+        def format(self, record):
+            entry = {
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
+                "level": record.levelname,
+                "message": record.getMessage(),
+                "function": record.funcName,
+                "module": record.module,
+                "hostname": HOSTNAME,
+            }
+            if record.exc_info:
+                entry["error"] = self.formatException(record.exc_info)
+            return json.dumps(entry)
+
+    @staticmethod
+    def is_lambda_environment():
+        return "AWS_LAMBDA_FUNCTION_NAME" in os.environ
+
+    def info(self, msg, *args): self.logger.info(msg, *args)
+    def warning(self, msg, *args): self.logger.warning(msg, *args)
+    def error(self, msg, *args): self.logger.error(msg, *args)
+    def debug(self, msg, *args): self.logger.debug(msg, *args)
+    def exception(self, msg, *args): self.logger.exception(msg, *args)
+
+log = CustomLogger(__name__)
+
+# --- Decorator for Logging ----------------------------------------------------
+def log_execution(func):
+    """Decorator to log Lambda function execution."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        log.info(f"Starting: {func.__name__}")
+        start = datetime.datetime.now(datetime.UTC)
+        try:
+            result = func(*args, **kwargs)
+            duration = (datetime.datetime.now(datetime.UTC) - start).total_seconds()
+            log.info(f"Completed: {func.__name__} in {duration:.2f}s")
+            return result
+        except Exception as e:
+            log.exception(f"Error in {func.__name__}: {e}")
+            raise
+    return wrapper
+
+# --- S3 Helper Functions ------------------------------------------------------
 def list_objects(prefix):
+    """Yield all S3 object keys for the given prefix."""
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
         for obj in page.get("Contents", []):
             yield obj["Key"]
 
-def lambda_handler(event, context):
-    # Parse query parameter: ?date=YYYY-MM-DD
-    params = event.get("queryStringParameters") or {}
-    date_str = params.get("date")
-
-    if not date_str:
-        return {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Missing ?date=YYYY-MM-DD parameter"})
-        }
-
+# --- Core Lambda Logic --------------------------------------------------------
+@log_execution
+def summarize_hourly(date_str: str):
+    """Summarize per-hour coverage for given date (YYYY-MM-DD)."""
     try:
         date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
-        return {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Invalid date format. Use YYYY-MM-DD"})
-        }
+        raise ValueError("Invalid date format. Use YYYY-MM-DD")
 
-    # Build prefix for that date
     year = date_obj.strftime("%Y")
     month = date_obj.strftime("%Y%m")
     day = date_obj.strftime("%Y%m%d")
     prefix = f"year={year}/month={month}/day={day}/"
+    log.info(f"Scanning S3 prefix: {prefix}")
 
     hour_counts = {}
+    count = 0
 
-    # Loop through all objects in that day's prefix
     for key in list_objects(prefix):
+        if not key.endswith(".json"):
+            continue
         parts = key.split("/")
         if len(parts) < 5:
             continue
-        # parts like: year=2025/month=202510/day=20251022/hour=2025102201/minute=202510220115/file.json
+
         hour_part = next((p for p in parts if p.startswith("hour=")), None)
         minute_part = next((p for p in parts if p.startswith("minute=")), None)
 
@@ -57,19 +134,61 @@ def lambda_handler(event, context):
             continue
 
         hour = hour_part.split("=")[1]
-        hour_counts.setdefault(hour, set()).add(minute_part.split("=")[1])
+        minute = minute_part.split("=")[1]
+        hour_counts.setdefault(hour, set()).add(minute)
+        count += 1
 
-    # Summarize counts
     summary = {h: len(minutes) for h, minutes in sorted(hour_counts.items())}
-
     result = {
         "date": date_str,
         "total_hours_found": len(summary),
-        "hours": summary
+        "total_records": count,
+        "hours": summary,
     }
+    log.info(f"Hourly summary computed for {date_str}: {len(summary)} hours found.")
+    return result
 
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(result, indent=2)
-    }
+# --- Lambda Handler -----------------------------------------------------------
+@log_execution
+def lambda_handler(event, context):
+    """AWS Lambda entrypoint."""
+    log.info("Lambda triggered for hourly summary check.")
+
+    params = event.get("queryStringParameters") or {}
+    date_str = params.get("date")
+
+    if not date_str:
+        log.warning("Missing ?date=YYYY-MM-DD parameter.")
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": "Missing ?date=YYYY-MM-DD parameter"})
+        }
+
+    try:
+        result = summarize_hourly(date_str)
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(result, indent=2)
+        }
+    except ValueError as ve:
+        log.error(f"Invalid input: {ve}")
+        return {
+            "statusCode": 400,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": str(ve)})
+        }
+    except Exception as e:
+        log.exception(f"Unexpected error: {e}")
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps({"error": str(e)})
+        }
+
+# --- Local Test Entrypoint ----------------------------------------------------
+if __name__ == "__main__":
+    log.info("Running hourly summary Lambda locally...")
+    test_event = {"queryStringParameters": {"date": datetime.date.today().isoformat()}}
+    print(json.dumps(lambda_handler(test_event, None), indent=2))

@@ -41,14 +41,15 @@
     <Enabled>true</Enabled>
     <Hidden>false</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>true</WakeToRun>    
     <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
     <Priority>7</Priority>
   </Settings>
   <Actions Context="Author">
     <Exec>
       <Command>pythonw.exe</Command>
-      <Arguments>"C:\Users\varad\Downloads\Compressed\vd-speed-test-final-plus-threshold\speed_collector.py"</Arguments>
-      <WorkingDirectory>C:\Users\varad\Downloads\Compressed\vd-speed-test-final-plus-threshold</WorkingDirectory>
+      <Arguments>"C:\vd-speed-test\speed_collector.py"</Arguments>
+      <WorkingDirectory>C:\vd-speed-test</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>

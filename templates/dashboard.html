@@ -19,6 +19,92 @@
       justify-content: space-between;
       margin-bottom: 1rem;
     }
+    
+    /* Filter Panel Styles */
+    .filter-panel {
+      background: white;
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .filter-panel h3 {
+      margin-top: 0;
+      margin-bottom: 1rem;
+      color: #1f2937;
+    }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .filter-group label {
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+      font-size: 13px;
+      color: #374151;
+    }
+    .filter-group input,
+    .filter-group select {
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .range-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    .filter-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+    .btn-secondary:hover {
+      background: #4b5563;
+    }
+    .filter-stats {
+      margin-top: 1rem;
+      padding: 0.8rem;
+      background: #f3f4f6;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+    }
+    
     .cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -47,7 +133,20 @@
       font-size: 14px;
       vertical-align: top;
     }
-    th { background: #f3f4f6; text-align: left; }
+    th { 
+      background: #f3f4f6; 
+      text-align: left;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    tr.filtered-out {
+      display: none;
+    }
+    tr:hover {
+      background: #f9fafb;
+    }
     .toolbar {
       display: flex;
       gap: 0.5rem;
@@ -64,6 +163,70 @@
     ul.links li { margin: 0.2rem 0; }
     canvas { height: 400px !important; }
     .chart-toolbar { margin: 0.8rem 0; }
+    
+    /* Quick Filter Badges */
+    .quick-filters {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.8rem;
+    }
+    .quick-filter-badge {
+      padding: 0.4rem 0.8rem;
+      background: #e0e7ff;
+      color: #3730a3;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .quick-filter-badge:hover {
+      background: #c7d2fe;
+    }
+    range-inputs input {
+      width: 80px !important; /* Smaller width for number inputs */
+    }
+    
+    input[type="number"] {
+      width: 90px;
+    }
+    
+    input[type="date"] {
+      width: 150px;
+    }
+
+    .quick-filter-checkbox {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.5rem 0.8rem;
+      background: #f3f4f6;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .quick-filter-checkbox:hover {
+      background: #e5e7eb;
+    }
+
+    .quick-filter-checkbox input[type="checkbox"] {
+      margin-right: 0.4rem;
+      cursor: pointer;
+    }
+
+    .quick-filter-checkbox input[type="checkbox"]:checked + span {
+      font-weight: 600;
+      color: #2563eb;
+    }
+
+    .quick-filter-checkbox:has(input:checked) {
+      background: #dbeafe;
+      border-color: #3b82f6;
+    }
+
   </style>
 </head>
 <body>
@@ -88,6 +251,119 @@
       <button type="submit">Apply</button>
     </form>
   </header>
+
+  <!-- Replace the filter panel section in the previous code with this enhanced version -->
+
+  <div class="filter-panel">
+    <h3>🔍 Advanced Filters</h3>
+    
+    <div class="filter-grid">
+      <!-- Date Range Filter -->
+      <div class="filter-group">
+        <label for="dateFrom">From Date</label>
+        <input type="date" id="dateFrom" style="width: 150px;">
+      </div>
+      
+      <div class="filter-group">
+        <label for="dateTo">To Date</label>
+        <input type="date" id="dateTo" style="width: 150px;">
+      </div>
+      
+      <!-- Download Speed Filter -->
+      <div class="filter-group">
+        <label>Download Speed (Mbps)</label>
+        <div class="range-inputs">
+          <input type="number" id="downloadMin" placeholder="Min" step="0.1" style="width: 75px;">
+          <input type="number" id="downloadMax" placeholder="Max" step="0.1" style="width: 75px;">
+        </div>
+      </div>
+      
+      <!-- Upload Speed Filter -->
+      <div class="filter-group">
+        <label>Upload Speed (Mbps)</label>
+        <div class="range-inputs">
+          <input type="number" id="uploadMin" placeholder="Min" step="0.1" style="width: 75px;">
+          <input type="number" id="uploadMax" placeholder="Max" step="0.1" style="width: 75px;">
+        </div>
+      </div>
+      
+      <!-- Ping Filter -->
+      <div class="filter-group">
+        <label>Ping (ms)</label>
+        <div class="range-inputs">
+          <input type="number" id="pingMin" placeholder="Min" step="0.1" style="width: 75px;">
+          <input type="number" id="pingMax" placeholder="Max" step="0.1" style="width: 75px;">
+        </div>
+      </div>
+      
+      <!-- Provider/Server Filter -->
+      <div class="filter-group">
+        <label for="providerFilter">Server/Provider</label>
+        <input type="text" 
+              id="providerFilter" 
+              list="serverList" 
+              placeholder="e.g., Airtel, ACT">
+        <datalist id="serverList"></datalist>
+      </div>
+      
+      <!-- IP Address Filter -->
+      <div class="filter-group">
+        <label for="ipFilter">IP Address</label>
+        <input type="text" 
+              id="ipFilter" 
+              list="ipList"
+              placeholder="e.g., 223.178">
+        <datalist id="ipList"></datalist>
+      </div>
+    </div>
+    
+    <!-- Quick Filter Checkboxes (Combined Mode) -->
+    <div style="margin-top: 1.5rem;">
+      <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Quick Filters (Select Multiple):</label>
+      <div class="quick-filters">
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-belowThreshold" value="belowThreshold">
+          <span>Below {{ threshold }} Mbps</span>
+        </label>
+        
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-performanceDrop" value="performanceDrop">
+          <span>Performance Drops (&lt;100 Mbps)</span>
+        </label>
+        
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-highPing" value="highPing">
+          <span>High Ping (&gt;20ms)</span>
+        </label>
+        
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-airtel" value="airtel">
+          <span>Airtel Only</span>
+        </label>
+        
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-act" value="act">
+          <span>ACT Only</span>
+        </label>
+        
+        <label class="quick-filter-checkbox">
+          <input type="checkbox" id="qf-railtel" value="railtel">
+          <span>RailTel Only</span>
+        </label>
+      </div>
+    </div>
+    
+    <div class="filter-actions">
+      <button class="btn btn-primary" onclick="applyAllFilters()">Apply Filters</button>
+      <button class="btn btn-secondary" onclick="resetFilters()">Reset All Filters</button>
+    </div>
+    
+    <div class="filter-stats" id="filterStats">
+      Showing all results
+    </div>
+  </div>
+
+
 
   {% if summary and data|length > 0 %}
   <section class="cards">
@@ -137,7 +413,7 @@
   </div>
 
   <h2 style="margin-top: 1.5rem;">{{ 'Minute' if mode=='minute' else 'Daily' }} Details</h2>
-  <table>
+  <table id="speedTable">
     <thead>
       <tr>
         <th>{{ 'Timestamp (IST)' if mode=='minute' else 'Date' }}</th>
@@ -150,9 +426,17 @@
         <th>Notes</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="tableBody">
       {% for row in data %}
-      <tr>
+      <tr data-timestamp="{{ row.date_ist_str }}" 
+          data-download="{{ row.download_avg or 0 }}" 
+          data-upload="{{ row.upload_avg or 0 }}" 
+          data-ping="{{ row.ping_avg or 0 }}" 
+          data-server="{{ row.top_server }}" 
+          data-ip="{{ row.public_ip }}"
+          data-below="{{ 'true' if row.below_expected else 'false' }}"
+          data-drop="{{ 'true' if row.download_anomaly else 'false' }}"
+          data-latency="{{ 'true' if row.ping_anomaly else 'false' }}">
         <td>{{ row.date_ist_str }}</td>
         <td class="{% if row.below_expected %}bad{% endif %}">{{ '%.2f'|format(row.download_avg or 0) }}</td>
         <td>{{ '%.2f'|format(row.upload_avg or 0) }}</td>
@@ -183,123 +467,359 @@
   </table>
 
   <script>
-    window.onload = () => {
-    const threshold = {{ threshold|tojson }};
-    const data = {{ data|tojson }};
-    const labels = data.map(d => d.date_ist_str);
-    const downloads = data.map(d => d.download_avg);
-    const uploads = data.map(d => d.upload_avg);
-    const pings = data.map(d => d.ping_avg);
-    const belowMask = data.map(d => d.below_expected);
-    const pointColors = belowMask.map(b => b ? 'red' : undefined);
-
-    // Format helpers on the *raw label string*
-    function formatShort(raw) {
-        try {
-        const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
-        return d.toTimeString().slice(0,5); // HH:MM
-        } catch { return raw; }
-    }
-    function formatFull(raw) {
-        try {
-        const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
-        return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-        } catch { return raw; }
-    }
-
-    // Tick callback functions MUST be normal functions (not arrows) to have 'this'
-    function tickShort(value /*, index, ticks */) {
-        const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
-        return formatShort(raw);
-    }
-    function tickFull(value /*, index, ticks */) {
-        const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
-        return formatFull(raw);
-    }
-
-    const thresholdLine = {
-        id: 'thresholdLine',
-        afterDraw(chart) {
-        const {ctx, chartArea: {left, right}, scales: {y}} = chart;
-        if (!y) return;
-        const yValue = y.getPixelForValue(threshold);
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(left, yValue);
-        ctx.lineTo(right, yValue);
-        ctx.setLineDash([6,4]);
-        ctx.strokeStyle = 'red';
-        ctx.stroke();
-        ctx.fillStyle = 'red';
-        ctx.font = '10px sans-serif';
-        ctx.fillText(`Threshold: ${threshold} Mbps`, right - 160, yValue - 6);
-        ctx.restore();
+      const threshold = {{ threshold|tojson }};
+      let chart;
+      let allData = {{ data|tojson }};
+      
+      function populateAutocompleteLists() {
+        const rows = document.querySelectorAll('#tableBody tr');
+        const servers = new Set();
+        const ips = new Set();
+        
+        rows.forEach(row => {
+          const server = row.getAttribute('data-server');
+          const ip = row.getAttribute('data-ip');
+          
+          if (server && server.trim()) servers.add(server);
+          if (ip && ip.trim()) ips.add(ip);
+        });
+        
+        const serverList = document.getElementById('serverList');
+        servers.forEach(server => {
+          const option = document.createElement('option');
+          option.value = server;
+          serverList.appendChild(option);
+        });
+        
+        const ipList = document.getElementById('ipList');
+        ips.forEach(ip => {
+          const option = document.createElement('option');
+          option.value = ip;
+          ipList.appendChild(option);
+        });
+      }
+      
+      function getDateOnly(dateString) {
+        if (!dateString) return null;
+        const dateStr = dateString.replace(' IST', '').replace(' ', 'T');
+        const date = new Date(dateStr);
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      }
+      
+      // Main filter function that combines ALL filters including quick filters
+      function applyAllFilters() {
+        // Get manual filter inputs
+        const dateFromInput = document.getElementById('dateFrom').value;
+        const dateToInput = document.getElementById('dateTo').value;
+        let downloadMin = parseFloat(document.getElementById('downloadMin').value);
+        let downloadMax = parseFloat(document.getElementById('downloadMax').value);
+        let uploadMin = parseFloat(document.getElementById('uploadMin').value);
+        let uploadMax = parseFloat(document.getElementById('uploadMax').value);
+        let pingMin = parseFloat(document.getElementById('pingMin').value);
+        let pingMax = parseFloat(document.getElementById('pingMax').value);
+        let providerFilter = document.getElementById('providerFilter').value.toLowerCase().trim();
+        const ipFilter = document.getElementById('ipFilter').value.toLowerCase().trim();
+        
+        // Get checked quick filters
+        const quickFilters = [];
+        document.querySelectorAll('.quick-filter-checkbox input[type="checkbox"]:checked').forEach(cb => {
+          quickFilters.push(cb.value);
+        });
+        
+        // Apply quick filter logic to main filter variables
+        if (quickFilters.includes('belowThreshold')) {
+          if (isNaN(downloadMax) || downloadMax > threshold - 0.01) {
+            downloadMax = threshold - 0.01;
+          }
         }
-    };
+        
+        if (quickFilters.includes('performanceDrop')) {
+          if (isNaN(downloadMax) || downloadMax > 100) {
+            downloadMax = 100;
+          }
+        }
+        
+        if (quickFilters.includes('highPing')) {
+          if (isNaN(pingMin) || pingMin < 20) {
+            pingMin = 20;
+          }
+        }
+        
+        // Handle provider quick filters (combine with OR logic)
+        const providerQuickFilters = [];
+        if (quickFilters.includes('airtel')) providerQuickFilters.push('airtel');
+        if (quickFilters.includes('act')) providerQuickFilters.push('act');
+        if (quickFilters.includes('railtel')) providerQuickFilters.push('railtel');
+        
+        // Convert dates
+        let dateFrom = null;
+        let dateTo = null;
+        
+        if (dateFromInput) {
+          const parts = dateFromInput.split('-');
+          dateFrom = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        }
+        
+        if (dateToInput) {
+          const parts = dateToInput.split('-');
+          dateTo = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        }
+        
+        const rows = document.querySelectorAll('#tableBody tr');
+        let visibleCount = 0;
+        let totalCount = rows.length;
+        
+        let filteredLabels = [];
+        let filteredDownloads = [];
+        let filteredUploads = [];
+        let filteredPings = [];
+        let filteredColors = [];
+        
+        rows.forEach((row, index) => {
+          let show = true;
+          
+          const timestamp = row.getAttribute('data-timestamp');
+          const download = parseFloat(row.getAttribute('data-download'));
+          const upload = parseFloat(row.getAttribute('data-upload'));
+          const ping = parseFloat(row.getAttribute('data-ping'));
+          const server = row.getAttribute('data-server').toLowerCase();
+          const ip = row.getAttribute('data-ip').toLowerCase();
+          const belowThreshold = row.getAttribute('data-below') === 'true';
+          
+          // Date range filter
+          if (dateFrom || dateTo) {
+            const rowDate = getDateOnly(timestamp);
+            if (rowDate) {
+              if (dateFrom && rowDate < dateFrom) show = false;
+              if (dateTo && rowDate > dateTo) show = false;
+            }
+          }
+          
+          // Download speed filter
+          if (!isNaN(downloadMin) && download < downloadMin) show = false;
+          if (!isNaN(downloadMax) && download > downloadMax) show = false;
+          
+          // Upload speed filter
+          if (!isNaN(uploadMin) && upload < uploadMin) show = false;
+          if (!isNaN(uploadMax) && upload > uploadMax) show = false;
+          
+          // Ping filter
+          if (!isNaN(pingMin) && ping < pingMin) show = false;
+          if (!isNaN(pingMax) && ping > pingMax) show = false;
+          
+          // Provider filter (manual OR quick filters)
+          if (providerQuickFilters.length > 0) {
+            // If quick filters are selected, check if server matches any of them
+            let matchesProvider = false;
+            for (let qf of providerQuickFilters) {
+              if (server.includes(qf)) {
+                matchesProvider = true;
+                break;
+              }
+            }
+            if (!matchesProvider) show = false;
+          } else if (providerFilter) {
+            // If only manual filter is set
+            if (!server.includes(providerFilter)) show = false;
+          }
+          
+          // IP filter
+          if (ipFilter && !ip.includes(ipFilter)) show = false;
+          
+          // Apply filter to table
+          if (show) {
+            row.classList.remove('filtered-out');
+            visibleCount++;
+            
+            if (allData[index]) {
+              filteredLabels.push(allData[index].date_ist_str);
+              filteredDownloads.push(allData[index].download_avg);
+              filteredUploads.push(allData[index].upload_avg);
+              filteredPings.push(allData[index].ping_avg);
+              filteredColors.push(belowThreshold ? 'red' : undefined);
+            }
+          } else {
+            row.classList.add('filtered-out');
+          }
+        });
+        
+        updateFilterStats(visibleCount, totalCount);
+        updateChart(filteredLabels, filteredDownloads, filteredUploads, filteredPings, filteredColors);
+      }
+      
+      function updateChart(labels, downloads, uploads, pings, colors) {
+        if (!chart) return;
+        
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = downloads;
+        chart.data.datasets[0].pointBackgroundColor = colors;
+        chart.data.datasets[1].data = uploads;
+        chart.data.datasets[2].data = pings;
+        chart.update('none');
+      }
+      
+      function resetFilters() {
+        document.getElementById('dateFrom').value = '';
+        document.getElementById('dateTo').value = '';
+        document.getElementById('downloadMin').value = '';
+        document.getElementById('downloadMax').value = '';
+        document.getElementById('uploadMin').value = '';
+        document.getElementById('uploadMax').value = '';
+        document.getElementById('pingMin').value = '';
+        document.getElementById('pingMax').value = '';
+        document.getElementById('providerFilter').value = '';
+        document.getElementById('ipFilter').value = '';
+        
+        // Uncheck all quick filter checkboxes
+        document.querySelectorAll('.quick-filter-checkbox input[type="checkbox"]').forEach(cb => {
+          cb.checked = false;
+        });
+        
+        const rows = document.querySelectorAll('#tableBody tr');
+        rows.forEach(row => row.classList.remove('filtered-out'));
+        
+        const labels = allData.map(d => d.date_ist_str);
+        const downloads = allData.map(d => d.download_avg);
+        const uploads = allData.map(d => d.upload_avg);
+        const pings = allData.map(d => d.ping_avg);
+        const belowMask = allData.map(d => d.below_expected);
+        const pointColors = belowMask.map(b => b ? 'red' : undefined);
+        
+        updateChart(labels, downloads, uploads, pings, pointColors);
+        updateFilterStats(rows.length, rows.length);
+      }
+      
+      function updateFilterStats(visible, total) {
+        const stats = document.getElementById('filterStats');
+        if (visible === total) {
+          stats.textContent = `Showing all ${total} results`;
+          stats.style.background = '#f3f4f6';
+        } else {
+          stats.textContent = `Showing ${visible} of ${total} results (${total - visible} filtered out)`;
+          stats.style.background = '#dbeafe';
+        }
+      }
+      
+      window.addEventListener('DOMContentLoaded', () => {
+        populateAutocompleteLists();
+        const totalRows = document.querySelectorAll('#tableBody tr').length;
+        updateFilterStats(totalRows, totalRows);
+      });
 
-    const ctx = document.getElementById('speedChart');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-        labels,
-        datasets: [
-            { label: 'Download (Mbps)', data: downloads, borderWidth: 1.5, fill: false, pointRadius: 1.5, pointBackgroundColor: pointColors },
-            { label: 'Upload (Mbps)', data: uploads, borderWidth: 1.5, fill: false, pointRadius: 1.5 },
-            { label: 'Ping (ms)', data: pings, borderWidth: 1.5, fill: false, pointRadius: 1.5, yAxisID: 'y1' }
-        ]
-        },
-        options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            tooltip: {
-            callbacks: {
-                title: (items) => {
-                const raw = items[0].label;
-                return formatFull(raw);
+      // Chart initialization code (same as before)
+      window.onload = () => {
+        const labels = allData.map(d => d.date_ist_str);
+        const downloads = allData.map(d => d.download_avg);
+        const uploads = allData.map(d => d.upload_avg);
+        const pings = allData.map(d => d.ping_avg);
+        const belowMask = allData.map(d => d.below_expected);
+        const pointColors = belowMask.map(b => b ? 'red' : undefined);
+
+        function formatShort(raw) {
+            try {
+            const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
+            return d.toTimeString().slice(0,5);
+            } catch { return raw; }
+        }
+        function formatFull(raw) {
+            try {
+            const d = new Date(raw.replace(" ", "T").replace("IST", "+05:30"));
+            return d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+            } catch { return raw; }
+        }
+
+        function tickShort(value) {
+            const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
+            return formatShort(raw);
+        }
+        function tickFull(value) {
+            const raw = (this && this.getLabelForValue) ? this.getLabelForValue(value) : String(value);
+            return formatFull(raw);
+        }
+
+        const thresholdLine = {
+            id: 'thresholdLine',
+            afterDraw(chart) {
+            const {ctx, chartArea: {left, right}, scales: {y}} = chart;
+            if (!y) return;
+            const yValue = y.getPixelForValue(threshold);
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(left, yValue);
+            ctx.lineTo(right, yValue);
+            ctx.setLineDash([6,4]);
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+            ctx.fillStyle = 'red';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`Threshold: ${threshold} Mbps`, right - 160, yValue - 6);
+            ctx.restore();
+            }
+        };
+
+        const ctx = document.getElementById('speedChart');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+            labels,
+            datasets: [
+                { label: 'Download (Mbps)', data: downloads, borderWidth: 1.5, fill: false, pointRadius: 1.5, pointBackgroundColor: pointColors },
+                { label: 'Upload (Mbps)', data: uploads, borderWidth: 1.5, fill: false, pointRadius: 1.5 },
+                { label: 'Ping (ms)', data: pings, borderWidth: 1.5, fill: false, pointRadius: 1.5, yAxisID: 'y1' }
+            ]
+            },
+            options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                tooltip: {
+                callbacks: {
+                    title: (items) => {
+                    const raw = items[0].label;
+                    return formatFull(raw);
+                    }
                 }
+                },
+                zoom: {
+                zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                pan: { enabled: true, mode: 'x' }
+                },
+                legend: { position: 'top' }
+            },
+            scales: {
+                x: {
+                ticks: {
+                    autoSkip: false,
+                    font: { size: 8 },
+                    callback: tickShort
+                },
+                title: { display: true, text: 'Time (IST)' }
+                },
+                y: { beginAtZero: true, title: { display: true, text: 'Speed (Mbps)' } },
+                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Ping (ms)' } }
             }
             },
-            zoom: {
-            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-            pan: { enabled: true, mode: 'x' }
-            },
-            legend: { position: 'top' }
-        },
-        scales: {
-            x: {
-            ticks: {
-                autoSkip: false,
-                font: { size: 8 },
-                callback: tickShort
-            },
-            title: { display: true, text: 'Time (IST)' }
-            },
-            y: { beginAtZero: true, title: { display: true, text: 'Speed (Mbps)' } },
-            y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Ping (ms)' } }
-        }
-        },
-        plugins: [thresholdLine]
-    });
-
-    // Buttons
-    const toggleBtn = document.getElementById('toggleLabels');
-    const resetBtn = document.getElementById('resetZoom');
-
-    if (toggleBtn) {
-        let compact = true;
-        toggleBtn.addEventListener('click', () => {
-        compact = !compact;
-        chart.options.scales.x.ticks.callback = compact ? tickShort : tickFull;
-        chart.update();
+            plugins: [thresholdLine]
         });
-    }
-    if (resetBtn) {
-        resetBtn.addEventListener('click', () => chart.resetZoom && chart.resetZoom());
-    }
-    };
-</script>
+
+        const toggleBtn = document.getElementById('toggleLabels');
+        const resetBtn = document.getElementById('resetZoom');
+
+        if (toggleBtn) {
+            let compact = true;
+            toggleBtn.addEventListener('click', () => {
+            compact = !compact;
+            chart.options.scales.x.ticks.callback = compact ? tickShort : tickFull;
+            chart.update();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => chart.resetZoom && chart.resetZoom());
+        }
+      };
+  </script>
+
 
 </body>
 </html>
