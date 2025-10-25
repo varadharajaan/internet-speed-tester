@@ -745,18 +745,20 @@ Resources:
         }
 
 # ---------------- Outputs (FIXED) ----------------
+# ---------------- Outputs (FIXED FOR SAM) ----------------
+# ---------------- Outputs (ACTUALLY WORKING VERSION) ----------------
 Outputs:
   AggregatorFunctionUrl:
     Description: URL for Daily Aggregator Function
-    Value: !GetAtt VdSpeedTestAggregator.FunctionUrl
+    Value: !GetAtt VdSpeedTestAggregatorUrl.FunctionUrl
 
   DashboardFunctionUrl:
     Description: URL for Dashboard Function
-    Value: !GetAtt VdSpeedTestDashboard.FunctionUrl
+    Value: !GetAtt VdSpeedTestDashboardUrl.FunctionUrl
 
   HourlyCheckerFunctionUrl:
     Description: URL for Hourly Checker Function
-    Value: !GetAtt VdSpeedTestHourlyChecker.FunctionUrl
+    Value: !GetAtt VdSpeedTestHourlyCheckerUrl.FunctionUrl
 
   MainDashboardUrl:
     Description: Main CloudWatch Monitoring Dashboard
@@ -789,11 +791,13 @@ Outputs:
   AlertsTopicArn:
     Description: "SNS Topic ARN for alerts — confirm the email subscription"
     Value: !Ref AlertsTopic
+  
+  SNSNotificationEmail:
+    Description: Email address subscribed to SNS alerts
+    Value: !Ref NotificationEmail
 
+    
 #==========================END================================
-
-
-
 
 # ===============================================================
 # Deployment & Testing Commands — vd-speed-test stack

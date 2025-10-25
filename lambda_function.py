@@ -292,15 +292,30 @@ def upload_summary(summary: dict, target_dt: datetime.datetime) -> str:
     return key
 
 @log_execution
-def run_daily():
-    now_ist = datetime.datetime.now(TIMEZONE)
-    target_date = (now_ist - datetime.timedelta(days=1)).date()
+def run_daily(custom_date: str = None):
+    """
+    Run daily aggregation. If custom_date (YYYY-MM-DD) is provided, aggregate for that day.
+    Otherwise, aggregate for the previous IST day.
+    """
+    if custom_date:
+        try:
+            target_date = datetime.datetime.strptime(custom_date, "%Y-%m-%d").date()
+            log.info(f"Running manual backfill for date {custom_date}")
+        except ValueError:
+            log.error(f"Invalid date format: {custom_date}, expected YYYY-MM-DD")
+            return {"message": f"Invalid date: {custom_date}", "records": 0}
+    else:
+        now_ist = datetime.datetime.now(TIMEZONE)
+        target_date = (now_ist - datetime.timedelta(days=1)).date()
+
     target_dt = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=TIMEZONE)
     log.info(f"Aggregating for {target_dt.strftime('%Y-%m-%d')} IST")
+
     summary = aggregate_for_date(target_dt)
     if not summary:
         log.error("No records found for aggregation")
         return {"message": "No records found", "records": 0}
+
     key = upload_summary(summary, target_dt)
     result = {
         "message": "Daily aggregation complete",
@@ -322,59 +337,71 @@ def run_daily():
 # --- Weekly rollup (last completed Mon..Sun) ----------------------------------
 @log_execution
 def aggregate_weekly():
+    """
+    Aggregate all available daily summaries for the current or last completed week (Mon–Sun).
+    """
     today_ist = datetime.datetime.now(TIMEZONE).date()
-    this_monday = today_ist - datetime.timedelta(days=today_ist.weekday())  # 0=Mon
-    last_monday = this_monday - datetime.timedelta(days=7)
-    last_sunday = last_monday + datetime.timedelta(days=6)
+    this_monday = today_ist - datetime.timedelta(days=today_ist.weekday())  # Monday of this week
+    this_sunday = this_monday + datetime.timedelta(days=6)
+
+    # Optionally, if today is Monday, fallback to the previous week
+    if today_ist == this_monday:
+        last_monday = this_monday - datetime.timedelta(days=7)
+        this_sunday = last_monday + datetime.timedelta(days=6)
+        this_monday = last_monday
 
     daily_summaries = []
-    d = last_monday
-    while d <= last_sunday:
+    d = this_monday
+    while d <= this_sunday:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
         key = f"aggregated/year={y}/month={m}/day={dd}/speed_summary_{dd}.json"
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             daily_summaries.append(json.loads(obj["Body"].read()))
-        except Exception:
-            pass
+        except s3.exceptions.NoSuchKey:
+            log.warning(f"Missing daily summary for {dd}")
+        except Exception as e:
+            log.warning(f"Error reading {key}: {e}")
         d += datetime.timedelta(days=1)
 
     if not daily_summaries:
-        log.warning("No daily summaries found for last completed week")
+        log.warning("No daily summaries found for this week")
         return None
 
     summary = {
-        "week_start": str(last_monday),
-        "week_end": str(last_sunday),
+        "week_start": str(this_monday),
+        "week_end": str(this_sunday),
         "days": len(daily_summaries),
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in daily_summaries]), 2),
     }
 
-    # ISO week label for folder naming (e.g., 2025W43)
-    week_label = f"{last_monday.strftime('%YW%W')}"
-    key = f"aggregated/year={last_monday.year}/week={week_label}/weekly_summary_{week_label}.json"
+    week_label = f"{this_monday.strftime('%YW%W')}"
+    key = f"aggregated/year={this_monday.year}/week={week_label}/weekly_summary_{week_label}.json"
     s3.put_object(
         Bucket=S3_BUCKET_WEEKLY,
         Key=key,
         Body=json.dumps(summary, indent=2),
         ContentType="application/json",
     )
-    log.info(f" Weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{key}")
+    log.info(f"Weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{key}")
     return summary
+
 
 # --- Monthly rollup (previous calendar month) ---------------------------------
 @log_execution
 def aggregate_monthly():
-    now_ist = datetime.datetime.now(TIMEZONE).date()
-    prev_month_last = (now_ist.replace(day=1) - datetime.timedelta(days=1))
-    prev_month_first = prev_month_last.replace(day=1)
-    month_tag = prev_month_last.strftime("%Y%m")
+    """Aggregate all daily summaries for the current month so far."""
+    today = datetime.datetime.now(TIMEZONE).date()
+    first_day = today.replace(day=1)
+    _, last_day_num = monthrange(today.year, today.month)
+    last_day = today  # up to today (or first_day + last_day_num for full month)
+    month_tag = today.strftime("%Y%m")
 
     summaries = []
-    d = prev_month_first
-    while d <= prev_month_last:
+    d = first_day
+    while d <= last_day:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
         key = f"aggregated/year={y}/month={m}/day={dd}/speed_summary_{dd}.json"
         try:
@@ -396,7 +423,7 @@ def aggregate_monthly():
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in summaries]), 2),
     }
 
-    key = f"aggregated/year={prev_month_first.year}/month={month_tag}/monthly_summary_{month_tag}.json"
+    key = f"aggregated/year={first_day.year}/month={month_tag}/monthly_summary_{month_tag}.json"
     s3.put_object(
         Bucket=S3_BUCKET_MONTHLY,
         Key=key,
@@ -406,41 +433,46 @@ def aggregate_monthly():
     log.info(f"Monthly summary uploaded to s3://{S3_BUCKET_MONTHLY}/{key}")
     return summary
 
+
 # --- Yearly rollup (previous calendar year) -----------------------------------
 @log_execution
 def aggregate_yearly():
+    """Aggregate all monthly summaries for the current year (YTD)."""
     now_ist = datetime.datetime.now(TIMEZONE).date()
-    year = now_ist.year - 1
+    current_year = now_ist.year
     summaries = []
-    for m in range(1, 13):
-        month_str = f"{year}{m:02d}"
-        key = f"aggregated/year={year}/month={month_str}/monthly_summary_{month_str}.json"
+
+    # Look for all monthly summaries from Jan up to current month
+    for m in range(1, now_ist.month + 1):
+        month_str = f"{current_year}{m:02d}"
+        key = f"aggregated/year={current_year}/month={month_str}/monthly_summary_{month_str}.json"
         try:
             obj = s3.get_object(Bucket=S3_BUCKET_MONTHLY, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
-        except Exception:
+        except Exception as e:
+            log.warning(f"Skipping missing month {month_str}: {e}")
             continue
 
     if not summaries:
-        log.warning(f"No monthly summaries found for year {year}")
+        log.warning(f"No monthly summaries found for {current_year}")
         return None
 
     summary = {
-        "year": year,
-        "months": len(summaries),
+        "year": current_year,
+        "months_aggregated": len(summaries),
         "avg_download": round(mean([x["avg_download"] for x in summaries]), 2),
         "avg_upload": round(mean([x["avg_upload"] for x in summaries]), 2),
         "avg_ping": round(mean([x["avg_ping"] for x in summaries]), 2),
     }
 
-    key = f"aggregated/year={year}/yearly_summary_{year}.json"
+    key = f"aggregated/year={current_year}/yearly_summary_{current_year}.json"
     s3.put_object(
         Bucket=S3_BUCKET_YEARLY,
         Key=key,
         Body=json.dumps(summary, indent=2),
         ContentType="application/json",
     )
-    log.info(f" Yearly summary uploaded to s3://{S3_BUCKET_YEARLY}/{key}")
+    log.info(f"Year-to-date summary uploaded to s3://{S3_BUCKET_YEARLY}/{key}")
     return summary
 
 # --- Lambda handler -----------------------------------------------------------
@@ -458,7 +490,9 @@ def lambda_handler(event, context):
         elif mode == "yearly":
             result = aggregate_yearly()
         else:
-            result = run_daily()
+            custom_date = (event or {}).get("date")
+            result = run_daily(custom_date)
+
 
         return {
             "statusCode": 200,
