@@ -56,7 +56,6 @@ Globals:
     Environment:
       Variables:
         S3_BUCKET: !Ref S3BucketName
-        # For multi-level outputs (use separate buckets as requested)
         S3_BUCKET_WEEKLY: !Sub 'vd-speed-test-weekly-${Environment}'
         S3_BUCKET_MONTHLY: !Sub 'vd-speed-test-monthly-${Environment}'
         S3_BUCKET_YEARLY: !Sub 'vd-speed-test-yearly-${Environment}'
@@ -83,7 +82,7 @@ Resources:
         Rules:
           - Id: WeeklyRetention
             Status: Enabled
-            ExpirationInDays: 730   # keep 2 years (tune as you like)
+            ExpirationInDays: 730
       Tags:
         - Key: Application
           Value: vd-speed-test
@@ -99,7 +98,7 @@ Resources:
         Rules:
           - Id: MonthlyRetention
             Status: Enabled
-            ExpirationInDays: 1825  # keep 5 years
+            ExpirationInDays: 1825
       Tags:
         - Key: Application
           Value: vd-speed-test
@@ -115,7 +114,7 @@ Resources:
         Rules:
           - Id: YearlyRetention
             Status: Enabled
-            ExpirationInDays: 3650  # keep 10 years
+            ExpirationInDays: 3650
       Tags:
         - Key: Application
           Value: vd-speed-test
@@ -128,13 +127,11 @@ Resources:
     Properties:
       FunctionName: !Sub 'vd-speedtest-daily-aggregator-${Environment}'
       Handler: lambda_function.lambda_handler
-      CodeUri: ./           # your repo root (lambda_function.py at root)
+      CodeUri: ./
       Description: Aggregates daily/weekly/monthly/yearly speed test data
       Policies:
-        # Raw/daily bucket
         - S3CrudPolicy:
             BucketName: !Ref S3BucketName
-        # Weekly/monthly/yearly buckets
         - S3CrudPolicy:
             BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
         - S3CrudPolicy:
@@ -220,7 +217,7 @@ Resources:
           RetryPolicy:
             MaximumRetryAttempts: 2
 
-    # --- Lambda Permissions for EventBridge Schedules ---
+  # --- Lambda Permissions for EventBridge Schedules (NO DUPLICATES) ---
   PermissionForDailySchedule:
     Type: AWS::Lambda::Permission
     Properties:
@@ -253,46 +250,13 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt YearlyAggregationSchedule.Arn
 
-  # Permissions for EventBridge to invoke Lambda
-  PermissionForEventsToInvokeLambdaDaily:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref VdSpeedTestAggregator
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt DailyAggregationSchedule.Arn
-
-  PermissionForEventsToInvokeLambdaWeekly:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref VdSpeedTestAggregator
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt WeeklyAggregationSchedule.Arn
-
-  PermissionForEventsToInvokeLambdaMonthly:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref VdSpeedTestAggregator
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt MonthlyAggregationSchedule.Arn
-
-  PermissionForEventsToInvokeLambdaYearly:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref VdSpeedTestAggregator
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt YearlyAggregationSchedule.Arn
-
   # ---------------- Dashboard Lambda ----------------
   VdSpeedTestDashboard:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'vd-speedtest-dashboard-${Environment}'
       Handler: lambda_dashboard.lambda_handler
-      CodeUri: ./ 
+      CodeUri: ./
       Description: Flask dashboard for vd-speed-test
       Timeout: 30
       MemorySize: 1024
@@ -334,7 +298,7 @@ Resources:
     Properties:
       FunctionName: !Sub 'vd-speedtest-hourly-checker-${Environment}'
       Handler: lambda_hourly_check.lambda_handler
-      CodeUri: ./ 
+      CodeUri: ./
       Description: Return hourly/minute folder count for a given date
       Timeout: 60
       MemorySize: 256
@@ -602,15 +566,16 @@ Resources:
       OKActions: [ !Ref AlertsTopic ]
 
   # ---------------------------------------------------------------------------
-  # 🧠 CloudWatch Logs Insights Query Definitions (Optional)
+  # CloudWatch Logs Insights Query Definitions
   # ---------------------------------------------------------------------------
+
   AggregatorAnomaliesQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: vd-speedtest-aggregator-anomalies
+      Name: !Sub 'vd-speedtest-aggregator-anomalies-${Environment}'
       QueryString: |
-        fields @timestamp, @message
-        | filter level = "WARNING" and message like /anomaly|degradation|threshold/i
+        fields @timestamp, @message, level
+        | filter level = "WARNING"
         | sort @timestamp desc
         | limit 50
       LogGroupNames:
@@ -619,7 +584,7 @@ Resources:
   AllFunctionsErrorSummaryQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: vd-speedtest-all-errors
+      Name: !Sub 'vd-speedtest-all-errors-${Environment}'
       QueryString: |
         fields @timestamp, @logStream, @message, level
         | filter level = "ERROR"
@@ -633,12 +598,12 @@ Resources:
   PerformanceMetricsQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: vd-speedtest-performance
+      Name: !Sub 'vd-speedtest-performance-${Environment}'
       QueryString: |
         fields @timestamp, message
         | filter message like /Completed/
-        | parse message /Completed: (?<function>[^ ]+) in (?<duration>[0-9.]+)s/
-        | stats avg(duration) as avg_seconds by function
+        | sort @timestamp desc
+        | limit 50
       LogGroupNames:
         - !Ref AggregatorLogGroup
         - !Ref DashboardLogGroup
@@ -647,17 +612,28 @@ Resources:
   DashboardErrorsQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: vd-speedtest-dashboard-errors
+      Name: !Sub 'vd-speedtest-dashboard-errors-${Environment}'
       QueryString: |
-        fields @timestamp, @message
+        fields @timestamp, @message, level
         | filter level = "ERROR"
         | sort @timestamp desc
         | limit 50
       LogGroupNames:
         - !Ref DashboardLogGroup
 
+  AggregatorSuccessQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: !Sub 'vd-speedtest-aggregator-success-${Environment}'
+      QueryString: |
+        fields @timestamp, message
+        | filter message like /Aggregation summary/
+        | sort @timestamp desc
+        | limit 20
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
 
-    # ---------------- Dashboards (corrected metric format) ----------------
+  # ---------------- Dashboards (ACTUALLY FIXED NOW) ----------------
   MainMonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
@@ -667,7 +643,10 @@ Resources:
           "widgets": [
             {
               "type": "metric",
-              "x": 0, "y": 0, "width": 12, "height": 6,
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
                   [ "vd-speed-test/Logs", "AggregatorErrors" ],
@@ -676,35 +655,44 @@ Resources:
                 ],
                 "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Aggregator Status"
+                "title": "Aggregator Status",
+                "period": 300
               }
             },
             {
               "type": "metric",
-              "x": 0, "y": 6, "width": 12, "height": 6,
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestAggregator}" } ],
-                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestDashboard}" } ],
-                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestHourlyChecker}" } ]
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${VdSpeedTestAggregator}" ],
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
                 ],
                 "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Lambda Invocations"
+                "title": "Lambda Invocations",
+                "period": 300
               }
             },
             {
               "type": "metric",
-              "x": 12, "y": 6, "width": 12, "height": 6,
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
               "properties": {
                 "metrics": [
-                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestAggregator}" } ],
-                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestDashboard}" } ],
-                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestHourlyChecker}" } ]
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${VdSpeedTestAggregator}" ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ "AWS/Lambda", "Errors", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
                 ],
                 "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Lambda Errors"
+                "title": "Lambda Errors",
+                "period": 300
               }
             }
           ]
@@ -726,12 +714,13 @@ Resources:
               "properties": {
                 "metrics": [
                   [ "AWS/Lambda", "Duration", "FunctionName", "${VdSpeedTestAggregator}" ],
-                  [ ".", "Duration", "FunctionName", "${VdSpeedTestDashboard}" ],
-                  [ ".", "Duration", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
+                  [ "AWS/Lambda", "Duration", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ "AWS/Lambda", "Duration", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
                 ],
                 "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "Lambda Duration (ms)"
+                "title": "Lambda Duration (ms)",
+                "period": 300
               }
             },
             {
@@ -743,30 +732,31 @@ Resources:
               "properties": {
                 "metrics": [
                   [ "AWS/Lambda", "Throttles", "FunctionName", "${VdSpeedTestAggregator}" ],
-                  [ ".", "Throttles", "FunctionName", "${VdSpeedTestDashboard}" ],
-                  [ ".", "Throttles", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
+                  [ "AWS/Lambda", "Throttles", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ "AWS/Lambda", "Throttles", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
                 ],
                 "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Lambda Throttles"
+                "title": "Lambda Throttles",
+                "period": 300
               }
             }
           ]
         }
 
-# ---------------- Outputs ----------------
+# ---------------- Outputs (FIXED) ----------------
 Outputs:
   AggregatorFunctionUrl:
     Description: URL for Daily Aggregator Function
-    Value: !GetAtt VdSpeedTestAggregatorUrl.FunctionUrl
+    Value: !GetAtt VdSpeedTestAggregator.FunctionUrl
 
   DashboardFunctionUrl:
     Description: URL for Dashboard Function
-    Value: !GetAtt VdSpeedTestDashboardUrl.FunctionUrl
+    Value: !GetAtt VdSpeedTestDashboard.FunctionUrl
 
   HourlyCheckerFunctionUrl:
     Description: URL for Hourly Checker Function
-    Value: !GetAtt VdSpeedTestHourlyCheckerUrl.FunctionUrl
+    Value: !GetAtt VdSpeedTestHourlyChecker.FunctionUrl
 
   MainDashboardUrl:
     Description: Main CloudWatch Monitoring Dashboard
@@ -797,8 +787,13 @@ Outputs:
     Value: !Ref HourlyCheckerLogGroup
 
   AlertsTopicArn:
-    Description: "SNS Topic ARN for alerts — ⚠️ confirm the email subscription to receive notifications"
+    Description: "SNS Topic ARN for alerts — confirm the email subscription"
     Value: !Ref AlertsTopic
+
+#==========================END================================
+
+
+
 
 # ===============================================================
 # Deployment & Testing Commands — vd-speed-test stack
