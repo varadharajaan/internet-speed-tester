@@ -12,4 +12,3 @@ confirm_changeset = false
 s3_bucket = "vd-speed-test"
 image_repositories = []
 s3_prefix = "vd-speedtest-stack"
-disable_rollback = true

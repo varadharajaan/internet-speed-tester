@@ -1,5 +1,4 @@
 {
   "expected_speed_mbps": 200,
-  "tolerance_percent": 5
-
+  "tolerance_percent": 10
 }

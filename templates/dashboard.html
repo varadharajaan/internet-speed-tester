@@ -227,6 +227,42 @@
       border-color: #3b82f6;
     }
 
+    /* Sort icon styles */
+    .sort-header {
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .sort-header:hover {
+      color: #3b82f6;
+    }
+
+    .sort-icon {
+      font-size: 14px;
+      color: #9ca3af;
+      transition: all 0.2s;
+    }
+
+    .sort-header:hover .sort-icon {
+      color: #3b82f6;
+    }
+
+    .sort-icon.active {
+      color: #3b82f6;
+    }
+
+    .sort-icon.desc {
+      transform: rotate(0deg);
+    }
+
+    .sort-icon.asc {
+      transform: rotate(180deg);
+    }
+
+
   </style>
 </head>
 <body>
@@ -414,18 +450,23 @@
 
   <h2 style="margin-top: 1.5rem;">{{ 'Minute' if mode=='minute' else 'Daily' }} Details</h2>
   <table id="speedTable">
-    <thead>
-      <tr>
-        <th>{{ 'Timestamp (IST)' if mode=='minute' else 'Date' }}</th>
-        <th>Download (Mbps)</th>
-        <th>Upload (Mbps)</th>
-        <th>Ping (ms)</th>
-        <th>Server</th>
-        <th>Public IP</th>
-        {% if show_urls %}<th>Result URLs</th>{% endif %}
-        <th>Notes</th>
-      </tr>
-    </thead>
+      <thead>
+        <tr>
+          <th>
+            <span class="sort-header" onclick="toggleSort()" id="sortHeader">
+              {{ 'Timestamp (IST)' if mode=='minute' else 'Date' }}
+              <span class="sort-icon desc" id="sortIcon">⇅</span>
+            </span>
+          </th>
+          <th>Download (Mbps)</th>
+          <th>Upload (Mbps)</th>
+          <th>Ping (ms)</th>
+          <th>Server</th>
+          <th>Public IP</th>
+          {% if show_urls %}<th>Result URLs</th>{% endif %}
+          <th>Notes</th>
+        </tr>
+      </thead>
     <tbody id="tableBody">
       {% for row in data %}
       <tr data-timestamp="{{ row.date_ist_str }}" 
@@ -699,9 +740,56 @@
           stats.style.background = '#dbeafe';
         }
       }
+
+            // Sort functionality
+      let currentSortOrder = 'desc'; // Default: latest first (descending)
+
+      function toggleSort() {
+        // Toggle sort order
+        currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+        
+        // Update icon
+        const icon = document.getElementById('sortIcon');
+        icon.classList.remove('desc', 'asc');
+        icon.classList.add(currentSortOrder);
+        icon.classList.add('active');
+        
+        // Sort the table
+        sortTableRows();
+      }
+
+      function sortTableRows() {
+        const tbody = document.getElementById('tableBody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Sort rows by timestamp
+        rows.sort((a, b) => {
+          const dateA = a.getAttribute('data-timestamp');
+          const dateB = b.getAttribute('data-timestamp');
+          
+          if (currentSortOrder === 'desc') {
+            // Latest first (descending)
+            return dateB.localeCompare(dateA);
+          } else {
+            // Oldest first (ascending)
+            return dateA.localeCompare(dateB);
+          }
+        });
+        
+        // Re-append rows in sorted order
+        rows.forEach(row => tbody.appendChild(row));
+      }
+
+      // Apply initial descending sort when page loads
+      document.addEventListener('DOMContentLoaded', () => {
+        sortTableRows(); // Sort latest first by default
+      });
+
       
+      // Replace or merge with your existing DOMContentLoaded listener
       window.addEventListener('DOMContentLoaded', () => {
         populateAutocompleteLists();
+        sortTableRows(); // Apply default descending sort
         const totalRows = document.querySelectorAll('#tableBody tr').length;
         updateFilterStats(totalRows, totalRows);
       });

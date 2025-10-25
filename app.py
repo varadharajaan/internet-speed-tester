@@ -51,6 +51,7 @@ class CustomLogger:
                 self.logger.addHandler(file_handler)
 
         self.logger.setLevel(level)
+        self.logger.propagate = False
 
     class JsonFormatter(logging.Formatter):
         def format(self, record):

@@ -1,25 +1,51 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: vd-speed-test — Aggregator + Dashboard + Hourly Checker deployment
-
+Description: vd-speed-test — Full Featured Free Tier Deployment
 
 Parameters:
+  NotificationEmail:
+    Type: String
+    Default: varathu09@gmail.com
+    Description: Email address to receive CloudWatch alarm notifications
+  
   S3BucketName:
     Type: String
     Default: vd-speed-test
-    Description: S3 bucket name for speed test data
-  
-  DailyScheduleExpression:
-    Type: String
-    Default: cron(30 0 * * ? *)
-    Description: Cron expression for daily aggregation (00:30 AM UTC)
-  
+    Description: S3 bucket name for raw/daily speed test data
+
   Environment:
     Type: String
     Default: prod
     AllowedValues: [dev, prod]
     Description: Environment name
 
+  # Schedules (UTC). These defaults align with IST requirements.
+  DailyScheduleExpression:
+    Type: String
+    Default: cron(30 0 * * ? *)           # 00:30 UTC = 06:00 IST daily
+    Description: Cron for daily aggregation (00:30 UTC)
+  WeeklyScheduleExpression:
+    Type: String
+    Default: cron(30 20 ? * MON *)        # Mon 20:30 UTC = Tue 02:00 IST (last completed Mon–Sun)
+    Description: Cron for weekly aggregation (Tue 02:00 IST)
+  MonthlyScheduleExpression:
+    Type: String
+    Default: cron(30 20 L * ? *)          # Last day 20:30 UTC = 1st 02:00 IST
+    Description: Cron for monthly aggregation (1st 02:00 IST)
+  YearlyScheduleExpression:
+    Type: String
+    Default: cron(30 20 31 12 ? *)        # Dec 31 20:30 UTC = Jan 1 02:00 IST
+    Description: Cron for yearly aggregation (Jan 1 02:00 IST)
+
+  ExpectedSpeedMbps:
+    Type: Number
+    Default: 200
+    Description: Expected internet speed in Mbps for anomaly detection
+
+  TolerancePercent:
+    Type: Number
+    Default: 10
+    Description: Tolerance percentage for speed variations
 
 Globals:
   Function:
@@ -30,8 +56,14 @@ Globals:
     Environment:
       Variables:
         S3_BUCKET: !Ref S3BucketName
+        # For multi-level outputs (use separate buckets as requested)
+        S3_BUCKET_WEEKLY: !Sub 'vd-speed-test-weekly-${Environment}'
+        S3_BUCKET_MONTHLY: !Sub 'vd-speed-test-monthly-${Environment}'
+        S3_BUCKET_YEARLY: !Sub 'vd-speed-test-yearly-${Environment}'
         ENVIRONMENT: !Ref Environment
         AWS_REGION1: ap-south-1
+        EXPECTED_SPEED_MBPS: !Ref ExpectedSpeedMbps
+        TOLERANCE_PERCENT: !Ref TolerancePercent
     LoggingConfig:
       LogFormat: JSON
       ApplicationLogLevel: INFO
@@ -40,19 +72,75 @@ Globals:
       Application: vd-speed-test
       ManagedBy: SAM
 
-
 Resources:
-  # --- Daily Aggregator Lambda ---
+  # ---------------- S3 buckets ----------------
+  WeeklyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
+      VersioningConfiguration: { Status: Suspended }
+      LifecycleConfiguration:
+        Rules:
+          - Id: WeeklyRetention
+            Status: Enabled
+            ExpirationInDays: 730   # keep 2 years (tune as you like)
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
+  MonthlyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vd-speed-test-monthly-${Environment}'
+      VersioningConfiguration: { Status: Suspended }
+      LifecycleConfiguration:
+        Rules:
+          - Id: MonthlyRetention
+            Status: Enabled
+            ExpirationInDays: 1825  # keep 5 years
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
+  YearlyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vd-speed-test-yearly-${Environment}'
+      VersioningConfiguration: { Status: Suspended }
+      LifecycleConfiguration:
+        Rules:
+          - Id: YearlyRetention
+            Status: Enabled
+            ExpirationInDays: 3650  # keep 10 years
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
+  # -------------- Functions & Logs --------------
   VdSpeedTestAggregator:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'vd-speedtest-daily-aggregator-${Environment}'
       Handler: lambda_function.lambda_handler
-      CodeUri: ./
-      Description: Aggregates daily speed test data
+      CodeUri: ./           # your repo root (lambda_function.py at root)
+      Description: Aggregates daily/weekly/monthly/yearly speed test data
       Policies:
+        # Raw/daily bucket
         - S3CrudPolicy:
             BucketName: !Ref S3BucketName
+        # Weekly/monthly/yearly buckets
+        - S3CrudPolicy:
+            BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
+        - S3CrudPolicy:
+            BucketName: !Sub 'vd-speed-test-monthly-${Environment}'
+        - S3CrudPolicy:
+            BucketName: !Sub 'vd-speed-test-yearly-${Environment}'
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -64,35 +152,76 @@ Resources:
     Metadata:
       BuildMethod: python3.12
 
-
   AggregatorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-daily-aggregator-${Environment}'
-      RetentionInDays: 14
+      RetentionInDays: 3
       Tags:
         - Key: Application
           Value: vd-speed-test
         - Key: ManagedBy
           Value: SAM
 
-
-  # --- EventBridge Daily Schedule ---
+  # -------------- EventBridge Rules --------------
   DailyAggregationSchedule:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'vd-speedtest-daily-schedule-${Environment}'
-      Description: Trigger daily aggregation at 6:00 AM IST (00:30 UTC)
+      Description: Trigger daily aggregation (00:30 UTC)
       ScheduleExpression: !Ref DailyScheduleExpression
       State: ENABLED
       Targets:
         - Arn: !GetAtt VdSpeedTestAggregator.Arn
-          Id: LambdaTarget
+          Id: LambdaTargetDaily
+          Input: '{"mode":"daily"}'
           RetryPolicy:
             MaximumRetryAttempts: 2
 
+  WeeklyAggregationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'vd-speedtest-weekly-schedule-${Environment}'
+      Description: Trigger weekly aggregation (Tue 02:00 IST)
+      ScheduleExpression: !Ref WeeklyScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt VdSpeedTestAggregator.Arn
+          Id: LambdaTargetWeekly
+          Input: '{"mode":"weekly"}'
+          RetryPolicy:
+            MaximumRetryAttempts: 2
 
-  PermissionForEventsToInvokeLambda:
+  MonthlyAggregationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'vd-speedtest-monthly-schedule-${Environment}'
+      Description: Trigger monthly aggregation (1st 02:00 IST)
+      ScheduleExpression: !Ref MonthlyScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt VdSpeedTestAggregator.Arn
+          Id: LambdaTargetMonthly
+          Input: '{"mode":"monthly"}'
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+  YearlyAggregationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'vd-speedtest-yearly-schedule-${Environment}'
+      Description: Trigger yearly aggregation (Jan 1 02:00 IST)
+      ScheduleExpression: !Ref YearlyScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt VdSpeedTestAggregator.Arn
+          Id: LambdaTargetYearly
+          Input: '{"mode":"yearly"}'
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
+    # --- Lambda Permissions for EventBridge Schedules ---
+  PermissionForDailySchedule:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref VdSpeedTestAggregator
@@ -100,14 +229,70 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DailyAggregationSchedule.Arn
 
+  PermissionForWeeklySchedule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyAggregationSchedule.Arn
 
-  # --- Flask Dashboard Lambda ---
+  PermissionForMonthlySchedule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyAggregationSchedule.Arn
+
+  PermissionForYearlySchedule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt YearlyAggregationSchedule.Arn
+
+  # Permissions for EventBridge to invoke Lambda
+  PermissionForEventsToInvokeLambdaDaily:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyAggregationSchedule.Arn
+
+  PermissionForEventsToInvokeLambdaWeekly:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyAggregationSchedule.Arn
+
+  PermissionForEventsToInvokeLambdaMonthly:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyAggregationSchedule.Arn
+
+  PermissionForEventsToInvokeLambdaYearly:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt YearlyAggregationSchedule.Arn
+
+  # ---------------- Dashboard Lambda ----------------
   VdSpeedTestDashboard:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'vd-speedtest-dashboard-${Environment}'
       Handler: lambda_dashboard.lambda_handler
-      CodeUri: ./
+      CodeUri: ./ 
       Description: Flask dashboard for vd-speed-test
       Timeout: 30
       MemorySize: 1024
@@ -132,26 +317,24 @@ Resources:
     Metadata:
       BuildMethod: python3.12
 
-
   DashboardLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-dashboard-${Environment}'
-      RetentionInDays: 7
+      RetentionInDays: 1
       Tags:
         - Key: Application
           Value: vd-speed-test
         - Key: ManagedBy
           Value: SAM
 
-
-  # --- Hourly Checker Lambda ---
+  # ---------------- Hourly Checker ----------------
   VdSpeedTestHourlyChecker:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'vd-speedtest-hourly-checker-${Environment}'
       Handler: lambda_hourly_check.lambda_handler
-      CodeUri: ./
+      CodeUri: ./ 
       Description: Return hourly/minute folder count for a given date
       Timeout: 60
       MemorySize: 256
@@ -165,8 +348,7 @@ Resources:
             BucketName: !Ref S3BucketName
         - Statement:
             - Effect: Allow
-              Action:
-                - s3:ListBucket
+              Action: [s3:ListBucket]
               Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
       FunctionUrlConfig:
         AuthType: NONE
@@ -179,172 +361,527 @@ Resources:
     Metadata:
       BuildMethod: python3.12
 
-
   HourlyCheckerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-hourly-checker-${Environment}'
-      RetentionInDays: 7
+      RetentionInDays: 1
       Tags:
         - Key: Application
           Value: vd-speed-test
         - Key: ManagedBy
           Value: SAM
 
-
-  # --- Metric Filters (auto metrics from logs) ---
-  AggregatorAnomalyMetricFilter:
+  # ---------------- Metric Filters ----------------
+  AggregatorErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref AggregatorLogGroup
-      FilterPattern: '"ERROR" OR "WARNING"'
+      FilterPattern: '{ $.level = "ERROR" }'
       MetricTransformations:
-        - MetricName: AnomalyCount
+        - MetricName: AggregatorErrors
           MetricNamespace: vd-speed-test/Logs
           MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
 
-
-  HourlyCheckerMissingMetricFilter:
+  AggregatorWarningMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
-      LogGroupName: !Ref HourlyCheckerLogGroup
-      FilterPattern: '"missing" OR "not found" OR "delayed"'
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '{ $.level = "WARNING" }'
       MetricTransformations:
-        - MetricName: MissingFileCount
+        - MetricName: AggregatorWarnings
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: "1"
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
 
+  AggregatorSuccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '{ $.level = "INFO" && $.message = "*Completed*" }'
+      MetricTransformations:
+        - MetricName: AggregatorSuccess
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
 
   DashboardErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref DashboardLogGroup
-      FilterPattern: '"ERROR" OR "Traceback"'
+      FilterPattern: '{ $.level = "ERROR" }'
       MetricTransformations:
-        - MetricName: HttpErrorCount
+        - MetricName: DashboardErrors
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: "1"
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
 
+  DashboardWarningMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DashboardLogGroup
+      FilterPattern: '{ $.level = "WARNING" }'
+      MetricTransformations:
+        - MetricName: DashboardWarnings
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
 
-  # --- Saved CloudWatch Logs Insights Queries ---
-  AggregatorAnomalyQuery:
+  HourlyCheckerErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref HourlyCheckerLogGroup
+      FilterPattern: '{ $.level = "ERROR" }'
+      MetricTransformations:
+        - MetricName: HourlyCheckerErrors
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
+
+  HourlyCheckerWarningMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref HourlyCheckerLogGroup
+      FilterPattern: '{ $.level = "WARNING" }'
+      MetricTransformations:
+        - MetricName: HourlyCheckerWarnings
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
+
+  DataCollectionMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '{ $.message = "*Aggregated*records*" }'
+      MetricTransformations:
+        - MetricName: DataCollectionRuns
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: 1
+          DefaultValue: 0
+          Unit: Count
+
+  # ---------------- Alarms -> SNS ----------------
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub vd-speedtest-alerts-${Environment}
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref NotificationEmail
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
+  AggregatorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-aggregator-errors-${Environment}'
+      AlarmDescription: Alert when aggregator has errors
+      MetricName: AggregatorErrors
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  AggregatorWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-aggregator-warnings-${Environment}'
+      AlarmDescription: Alert when aggregator has many warnings
+      MetricName: AggregatorWarnings
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  DashboardErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-dashboard-errors-${Environment}'
+      AlarmDescription: Alert when dashboard has errors
+      MetricName: DashboardErrors
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  HourlyCheckerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-checker-errors-${Environment}'
+      AlarmDescription: Alert when hourly checker has errors
+      MetricName: HourlyCheckerErrors
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  AggregatorLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-lambda-aggregator-error-${Environment}'
+      AlarmDescription: Lambda function errors for aggregator
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VdSpeedTestAggregator
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  DashboardLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-lambda-dashboard-error-${Environment}'
+      AlarmDescription: Lambda function errors for dashboard
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VdSpeedTestDashboard
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  DataCollectionFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-data-collection-failure-${Environment}'
+      AlarmDescription: Alert when no data collected for 2 days
+      MetricName: DataCollectionRuns
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 172800
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [ !Ref AlertsTopic ]
+      OKActions: [ !Ref AlertsTopic ]
+
+  # ---------------------------------------------------------------------------
+  # 🧠 CloudWatch Logs Insights Query Definitions (Optional)
+  # ---------------------------------------------------------------------------
+  AggregatorAnomaliesQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: !Sub 'vd-speedtest/Aggregator Warnings and Anomalies (${Environment})'
+      Name: vd-speedtest-aggregator-anomalies
+      QueryString: |
+        fields @timestamp, @message
+        | filter level = "WARNING" and message like /anomaly|degradation|threshold/i
+        | sort @timestamp desc
+        | limit 50
       LogGroupNames:
         - !Ref AggregatorLogGroup
-      QueryString: |
-        fields @timestamp, @message
-        | filter level in ["ERROR","WARNING"] or message like /Below|Performance Drop|Latency Spike/
-        | sort @timestamp desc
-        | limit 100
 
-  HourlyCheckerMissingFilesQuery:
+  AllFunctionsErrorSummaryQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: !Sub 'vd-speedtest/Hourly Checker Missing Files (${Environment})'
-      LogGroupNames:
-        - !Ref HourlyCheckerLogGroup
+      Name: vd-speedtest-all-errors
       QueryString: |
-        fields @timestamp, @message
-        | filter @message like /missing|not found|delayed|No data|zero files/
-        | sort @timestamp desc
-        | limit 100
+        fields @timestamp, @logStream, @message, level
+        | filter level = "ERROR"
+        | stats count(*) as error_count by @logStream
+        | sort error_count desc
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
+        - !Ref DashboardLogGroup
+        - !Ref HourlyCheckerLogGroup
 
+  PerformanceMetricsQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      Name: vd-speedtest-performance
+      QueryString: |
+        fields @timestamp, message
+        | filter message like /Completed/
+        | parse message /Completed: (?<function>[^ ]+) in (?<duration>[0-9.]+)s/
+        | stats avg(duration) as avg_seconds by function
+      LogGroupNames:
+        - !Ref AggregatorLogGroup
+        - !Ref DashboardLogGroup
+        - !Ref HourlyCheckerLogGroup
 
   DashboardErrorsQuery:
     Type: AWS::Logs::QueryDefinition
     Properties:
-      Name: !Sub 'vd-speedtest/Dashboard Errors (${Environment})'
-      LogGroupNames:
-        - !Ref DashboardLogGroup
+      Name: vd-speedtest-dashboard-errors
       QueryString: |
         fields @timestamp, @message
-        | filter @message like /ERROR|Traceback|Exception|flask/
+        | filter level = "ERROR"
         | sort @timestamp desc
-        | limit 100
-
-
-  AllFunctionsErrorsQuery:
-    Type: AWS::Logs::QueryDefinition
-    Properties:
-      Name: !Sub 'vd-speedtest/All Functions Errors (${Environment})'
+        | limit 50
       LogGroupNames:
-        - !Ref AggregatorLogGroup
         - !Ref DashboardLogGroup
-        - !Ref HourlyCheckerLogGroup
-      QueryString: |
-        fields @timestamp, @log, @message
-        | filter @message like /ERROR|Below|Performance Drop|Latency Spike|missing|not found|delayed|No data|zero files/
-        | sort @timestamp desc
-        | limit 200
 
 
-  AggregatorPerformanceQuery:
-    Type: AWS::Logs::QueryDefinition
+    # ---------------- Dashboards (corrected metric format) ----------------
+  MainMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
     Properties:
-      Name: !Sub 'vd-speedtest/Aggregator Performance (${Environment})'
-      LogGroupNames:
-        - !Ref AggregatorLogGroup
-      QueryString: |
-        fields @timestamp, @duration, @billedDuration, @memorySize, @maxMemoryUsed
-        | stats avg(@duration), max(@duration), min(@duration), avg(@maxMemoryUsed) by bin(1h)
+      DashboardName: !Sub 'vd-speedtest-main-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "vd-speed-test/Logs", "AggregatorErrors" ],
+                  [ "vd-speed-test/Logs", "AggregatorWarnings" ],
+                  [ "vd-speed-test/Logs", "AggregatorSuccess" ]
+                ],
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Aggregator Status"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestAggregator}" } ],
+                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestDashboard}" } ],
+                [ "AWS/Lambda", "Invocations", { "FunctionName": "${VdSpeedTestHourlyChecker}" } ]
+                ],
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Invocations"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestAggregator}" } ],
+                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestDashboard}" } ],
+                  [ "AWS/Lambda", "Errors", { "stat": "Sum" }, { "FunctionName": "${VdSpeedTestHourlyChecker}" } ]
+                ],
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Errors"
+              }
+            }
+          ]
+        }
 
+  PerformanceDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'vd-speedtest-performance-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Duration", "FunctionName", "${VdSpeedTestAggregator}" ],
+                  [ ".", "Duration", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ ".", "Duration", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
+                ],
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (ms)"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Throttles", "FunctionName", "${VdSpeedTestAggregator}" ],
+                  [ ".", "Throttles", "FunctionName", "${VdSpeedTestDashboard}" ],
+                  [ ".", "Throttles", "FunctionName", "${VdSpeedTestHourlyChecker}" ]
+                ],
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Throttles"
+              }
+            }
+          ]
+        }
 
+# ---------------- Outputs ----------------
 Outputs:
   AggregatorFunctionUrl:
     Description: URL for Daily Aggregator Function
     Value: !GetAtt VdSpeedTestAggregatorUrl.FunctionUrl
-    Export:
-      Name: !Sub '${AWS::StackName}-AggregatorUrl'
-
 
   DashboardFunctionUrl:
     Description: URL for Dashboard Function
     Value: !GetAtt VdSpeedTestDashboardUrl.FunctionUrl
-    Export:
-      Name: !Sub '${AWS::StackName}-DashboardUrl'
-
 
   HourlyCheckerFunctionUrl:
     Description: URL for Hourly Checker Function
     Value: !GetAtt VdSpeedTestHourlyCheckerUrl.FunctionUrl
-    Export:
-      Name: !Sub '${AWS::StackName}-CheckerUrl'
 
+  MainDashboardUrl:
+    Description: Main CloudWatch Monitoring Dashboard
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=vd-speedtest-main-${Environment}'
 
-  CloudWatchLogsInsightsConsole:
-    Description: Open CloudWatch Logs Insights to see saved queries
+  PerformanceDashboardUrl:
+    Description: Performance Metrics Dashboard
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=vd-speedtest-performance-${Environment}'
+
+  CloudWatchLogsInsightsUrl:
+    Description: CloudWatch Logs Insights
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:logs-insights'
 
+  CloudWatchAlarmsUrl:
+    Description: CloudWatch Alarms Console
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#alarmsV2:'
 
   AggregatorLogGroupName:
-    Description: Log group name for Aggregator function
+    Description: Aggregator log group
     Value: !Ref AggregatorLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-AggregatorLogGroup'
-
 
   DashboardLogGroupName:
-    Description: Log group name for Dashboard function
+    Description: Dashboard log group
     Value: !Ref DashboardLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-DashboardLogGroup'
-
 
   HourlyCheckerLogGroupName:
-    Description: Log group name for Hourly Checker function
+    Description: Checker log group
     Value: !Ref HourlyCheckerLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-CheckerLogGroup'
 
-# Deployment commands:
+  AlertsTopicArn:
+    Description: "SNS Topic ARN for alerts — ⚠️ confirm the email subscription to receive notifications"
+    Value: !Ref AlertsTopic
+
+# ===============================================================
+# Deployment & Testing Commands — vd-speed-test stack
+# ===============================================================
+
+# Validate SAM template syntax
 # sam validate
+
+# Build Lambda functions using container for dependency isolation
 # sam build --use-container
-# sam deploy --guided --parameter-overrides Environment=prod
+
+# Initial guided deploy (creates roles, buckets, topics, dashboards)
+# sam deploy --guided --stack-name vd-speedtest-stack --parameter-overrides Environment=prod ExpectedSpeedMbps=200 TolerancePercent=10 --capabilities CAPABILITY_IAM
+
+# Subsequent deploys using saved samconfig.toml
 # sam deploy --config-file samconfig.toml --no-confirm-changeset
-# sam logs -n vd-speedtest-daily-aggregator-prod --stack-name vd-speedtest-stack --tail
-# sam logs -n vd-speedtest-dashboard-prod --stack-name vd-speedtest-stack --tail
-# sam logs -n vd-speedtest-hourly-checker-prod --stack-name vd-speedtest-stack --tail
-# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod out.json
+
+# ---------------------------------------------------------------
+# Check stack outputs (URLs, ARNs, dashboard links)
 # aws cloudformation describe-stacks --stack-name vd-speedtest-stack --query 'Stacks[0].Outputs'
+
+# ---------------------------------------------------------------
+# Tail Lambda logs (real-time)
+
+# Daily Aggregator logs
+# sam logs -n vd-speedtest-daily-aggregator-prod --stack-name vd-speedtest-stack --tail
+
+# Dashboard logs
+# sam logs -n vd-speedtest-dashboard-prod --stack-name vd-speedtest-stack --tail
+
+# Hourly Checker logs
+# sam logs -n vd-speedtest-hourly-checker-prod --stack-name vd-speedtest-stack --tail
+
+# ---------------------------------------------------------------
+# Invoke Lambdas manually
+
+# Daily aggregation test
+# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod --payload '{"mode":"daily"}' out-daily.json --cli-binary-format raw-in-base64-out; cat out-daily.json | jq
+
+# Weekly aggregation test
+# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod --payload '{"mode":"weekly"}' out-weekly.json --cli-binary-format raw-in-base64-out; cat out-weekly.json | jq
+
+# Monthly aggregation test
+# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod --payload '{"mode":"monthly"}' out-monthly.json --cli-binary-format raw-in-base64-out; cat out-monthly.json | jq
+
+# Yearly aggregation test
+# aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod --payload '{"mode":"yearly"}' out-yearly.json --cli-binary-format raw-in-base64-out; cat out-yearly.json | jq
+
+# ---------------------------------------------------------------
+# Verify CloudWatch metrics
+
+# Aggregator errors
+# aws cloudwatch get-metric-statistics --namespace vd-speed-test/Logs --metric-name AggregatorErrors --start-time 2025-01-01T00:00:00Z --end-time 2025-01-02T00:00:00Z --period 3600 --statistics Sum
+
+# Dashboard errors
+# aws cloudwatch get-metric-statistics --namespace vd-speed-test/Logs --metric-name DashboardErrors --start-time 2025-01-01T00:00:00Z --end-time 2025-01-02T00:00:00Z --period 3600 --statistics Sum
+
+# Hourly checker errors
+# aws cloudwatch get-metric-statistics --namespace vd-speed-test/Logs --metric-name HourlyCheckerErrors --start-time 2025-01-01T00:00:00Z --end-time 2025-01-02T00:00:00Z --period 3600 --statistics Sum
+
+# ---------------------------------------------------------------
+# CloudWatch alarm checks
+
+# Aggregator error alarm
+# aws cloudwatch describe-alarms --alarm-names vd-speedtest-aggregator-errors-prod
+
+# Aggregator warning alarm
+# aws cloudwatch describe-alarms --alarm-names vd-speedtest-aggregator-warnings-prod
+
+# Data collection failure alarm
+# aws cloudwatch describe-alarms --alarm-names vd-speedtest-data-collection-failure-prod
+
+# ---------------------------------------------------------------
+# CloudWatch dashboard & queries
+
+# Get full dashboard JSON
+# aws cloudwatch get-dashboard --dashboard-name vd-speedtest-main-prod
+
+# List dashboard query definitions
+# aws logs describe-query-definitions --query 'queryDefinitions[?starts_with(Name, `vd-speedtest/`)]'
+
+# ---------------------------------------------------------------
+# SNS subscription
+# Check your email (from AWS Notifications) and click “Confirm subscription” 
+# to start receiving alerts from vd-speedtest-alerts-prod
+# ===============================================================
