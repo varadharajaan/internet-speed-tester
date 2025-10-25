@@ -40,6 +40,8 @@ LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
 LOG_BACKUP_COUNT = 5
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
+events = boto3.client("events", region_name=AWS_REGION1)
+
 
 # --- AWS Client ---------------------------------------------------------------
 s3 = boto3.client("s3", region_name=AWS_REGION1)
@@ -180,6 +182,23 @@ def detect_anomalies(downloads, uploads, pings):
             log.warning(f"Latency spike detected: max ping {max_ping:.2f} ms")
 
     return anomalies
+
+def emit_success_event(mode: str, date: str = None):
+    """Send a success signal to EventBridge when aggregation completes."""
+    detail = {"status": "success", "mode": mode}
+    # if date:
+    #     detail["date"] = date
+    # events.put_events(
+    #     Entries=[
+    #         {
+    #             "Source": "vd-speed-test.aggregator",
+    #             "DetailType": "AggregationComplete",
+    #             "Detail": json.dumps(detail),
+    #             "EventBusName": "default"
+    #         }
+    #     ]
+    # )
+    log.info(f" Emitted success event for mode={mode}")
 
 # --- Daily aggregation ---------------------------------------------------------
 @log_execution
@@ -332,6 +351,7 @@ def run_daily(custom_date: str = None):
         "s3_key": key,
     }
     log.info(f"Aggregation summary: {json.dumps(result, indent=2)}")
+    emit_success_event("daily")      # at end of run_daily
     return result
 
 # --- Weekly rollup (last completed Mon..Sun) ----------------------------------
@@ -386,8 +406,8 @@ def aggregate_weekly():
         ContentType="application/json",
     )
     log.info(f"Weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{key}")
+    emit_success_event("weekly")     # at end of aggregate_weekly
     return summary
-
 
 # --- Monthly rollup (previous calendar month) ---------------------------------
 @log_execution
@@ -431,8 +451,8 @@ def aggregate_monthly():
         ContentType="application/json",
     )
     log.info(f"Monthly summary uploaded to s3://{S3_BUCKET_MONTHLY}/{key}")
+    emit_success_event("monthly")     # at end of aggregate_monthly
     return summary
-
 
 # --- Yearly rollup (previous calendar year) -----------------------------------
 @log_execution
@@ -473,6 +493,7 @@ def aggregate_yearly():
         ContentType="application/json",
     )
     log.info(f"Year-to-date summary uploaded to s3://{S3_BUCKET_YEARLY}/{key}")
+    emit_success_event("yearly")     # at end of aggregate_yearly
     return summary
 
 # --- Lambda handler -----------------------------------------------------------
