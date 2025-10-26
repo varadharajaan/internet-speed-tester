@@ -310,10 +310,22 @@ Resources:
           FLASK_ENV: production
           AWS_REGION1: ap-south-1
           S3_BUCKET: !Ref S3BucketName
+          S3_BUCKET_HOURLY: !Sub 'vd-speed-test-hourly-${Environment}'
+          S3_BUCKET_WEEKLY: !Sub 'vd-speed-test-weekly-${Environment}'
+          S3_BUCKET_MONTHLY: !Sub 'vd-speed-test-monthly-${Environment}'
+          S3_BUCKET_YEARLY: !Sub 'vd-speed-test-yearly-${Environment}'
           ENVIRONMENT: !Ref Environment
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref S3BucketName
+        - S3ReadPolicy:
+            BucketName: !Sub 'vd-speed-test-hourly-${Environment}'
+        - S3ReadPolicy:
+            BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
+        - S3ReadPolicy:
+            BucketName: !Sub 'vd-speed-test-monthly-${Environment}'
+        - S3ReadPolicy:
+            BucketName: !Sub 'vd-speed-test-yearly-${Environment}'
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
