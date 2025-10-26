@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
 vd-speed-test aggregator Lambda
+- Hourly: aggregates 15-min records into hourly summary, writes to:
+    s3://<S3_BUCKET_HOURLY>/aggregated/year=YYYY/month=YYYYMM/day=YYYYMMDD/hour=YYYYMMDDHH/speed_test_summary.json
 - Daily: aggregates minute-level results into day summary, writes to:
-    s3://<S3_BUCKET>/aggregated/year=YYYY/month=YYYYMM/day=YYYYMMDD/speed_summary_YYYYMMDD.json
+    s3://<S3_BUCKET>/aggregated/year=YYYY/month=YYYYMM/day=YYYYMMDD/speed_test_summary.json
 - Weekly/Monthly/Yearly: roll-ups from daily → weekly/monthly/yearly, writing into:
-    s3://<S3_BUCKET_WEEKLY>/aggregated/...
-    s3://<S3_BUCKET_MONTHLY>/aggregated/...
-    s3://<S3_BUCKET_YEARLY>/aggregated/...
+    s3://<S3_BUCKET_WEEKLY>/aggregated/year=YYYY/week=YYYYWWW/speed_test_summary.json
+    s3://<S3_BUCKET_MONTHLY>/aggregated/year=YYYY/month=YYYYMM/speed_test_summary.json
+    s3://<S3_BUCKET_YEARLY>/aggregated/year=YYYY/speed_test_summary.json
+    
+Note: All aggregation levels now use the same filename (speed_test_summary.json) for simplicity.
 """
 
 import boto3
@@ -326,7 +330,7 @@ def upload_summary(summary: dict, target_dt: datetime.datetime) -> str:
     year = target_dt.strftime("%Y")
     month = target_dt.strftime("%Y%m")
     day = target_dt.strftime("%Y%m%d")
-    key = f"aggregated/year={year}/month={month}/day={day}/speed_summary_{day}.json"
+    key = f"aggregated/year={year}/month={month}/day={day}/speed_test_summary.json"
 
     s3.put_object(
         Bucket=S3_BUCKET,
@@ -474,7 +478,7 @@ def aggregate_hourly():
     }
 
     # Upload to hourly bucket
-    key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/hourly_summary_{hour}.json"
+    key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/speed_test_summary.json"
     s3.put_object(
         Bucket=S3_BUCKET_HOURLY,
         Key=key,
@@ -505,7 +509,7 @@ def aggregate_weekly():
     d = this_monday
     while d <= this_sunday:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
-        key = f"aggregated/year={y}/month={m}/day={dd}/speed_summary_{dd}.json"
+        key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             daily_summaries.append(json.loads(obj["Body"].read()))
@@ -529,7 +533,7 @@ def aggregate_weekly():
     }
 
     week_label = f"{this_monday.strftime('%YW%W')}"
-    key = f"aggregated/year={this_monday.year}/week={week_label}/weekly_summary_{week_label}.json"
+    key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
     s3.put_object(
         Bucket=S3_BUCKET_WEEKLY,
         Key=key,
@@ -554,7 +558,7 @@ def aggregate_monthly():
     d = first_day
     while d <= last_day:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
-        key = f"aggregated/year={y}/month={m}/day={dd}/speed_summary_{dd}.json"
+        key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
@@ -574,7 +578,7 @@ def aggregate_monthly():
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in summaries]), 2),
     }
 
-    key = f"aggregated/year={first_day.year}/month={month_tag}/monthly_summary_{month_tag}.json"
+    key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
     s3.put_object(
         Bucket=S3_BUCKET_MONTHLY,
         Key=key,
@@ -596,7 +600,7 @@ def aggregate_yearly():
     # Look for all monthly summaries from Jan up to current month
     for m in range(1, now_ist.month + 1):
         month_str = f"{current_year}{m:02d}"
-        key = f"aggregated/year={current_year}/month={month_str}/monthly_summary_{month_str}.json"
+        key = f"aggregated/year={current_year}/month={month_str}/speed_test_summary.json"
         try:
             obj = s3.get_object(Bucket=S3_BUCKET_MONTHLY, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
@@ -616,7 +620,7 @@ def aggregate_yearly():
         "avg_ping": round(mean([x["avg_ping"] for x in summaries]), 2),
     }
 
-    key = f"aggregated/year={current_year}/yearly_summary_{current_year}.json"
+    key = f"aggregated/year={current_year}/speed_test_summary.json"
     s3.put_object(
         Bucket=S3_BUCKET_YEARLY,
         Key=key,
