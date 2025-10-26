@@ -22,25 +22,52 @@ from collections import Counter
 from functools import wraps
 from calendar import monthrange  # for clean month-end calculation
 
-# --- Configuration ------------------------------------------------------------
-S3_BUCKET = os.environ.get("S3_BUCKET", "vd-speed-test")
-AWS_REGION1 = os.environ.get("AWS_REGION1", "ap-south-1")
-TIMEZONE = pytz.timezone("Asia/Kolkata")
-EXPECTED_SPEED_MBPS = float(os.environ.get("EXPECTED_SPEED_MBPS", "200"))
-TOLERANCE_PERCENT = float(os.environ.get("TOLERANCE_PERCENT", "10"))
+# --- Configuration from config.json + env vars --------------------------------
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+DEFAULT_CONFIG = {
+    "s3_bucket": "vd-speed-test",
+    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
+    "aws_region": "ap-south-1",
+    "timezone": "Asia/Kolkata",
+    "expected_speed_mbps": 200,
+    "tolerance_percent": 10,
+    "log_level": "INFO",
+    "log_max_bytes": 10485760,
+    "log_backup_count": 5
+}
 
-# Rollup buckets (match template names with -${Environment})
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "prod")
-S3_BUCKET_WEEKLY = os.environ.get("S3_BUCKET_WEEKLY", f"vd-speed-test-weekly-{ENVIRONMENT}")
-S3_BUCKET_MONTHLY = os.environ.get("S3_BUCKET_MONTHLY", f"vd-speed-test-monthly-{ENVIRONMENT}")
-S3_BUCKET_YEARLY = os.environ.get("S3_BUCKET_YEARLY", f"vd-speed-test-yearly-{ENVIRONMENT}")
+# Load config
+config = DEFAULT_CONFIG.copy()
+if os.path.exists(CONFIG_PATH):
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config.update(json.load(f))
+    except Exception:
+        pass  # Use defaults if config fails to load
+
+S3_BUCKET = os.environ.get("S3_BUCKET", config.get("s3_bucket"))
+AWS_REGION1 = os.environ.get("AWS_REGION1", config.get("aws_region"))
+TIMEZONE = pytz.timezone(config.get("timezone"))
+EXPECTED_SPEED_MBPS = float(os.environ.get("EXPECTED_SPEED_MBPS", str(config.get("expected_speed_mbps"))))
+TOLERANCE_PERCENT = float(os.environ.get("TOLERANCE_PERCENT", str(config.get("tolerance_percent"))))
+
+# Rollup buckets from config.json (with environment variable override)
+S3_BUCKET_HOURLY = os.environ.get("S3_BUCKET_HOURLY", config.get("s3_bucket_hourly"))
+S3_BUCKET_WEEKLY = os.environ.get("S3_BUCKET_WEEKLY", config.get("s3_bucket_weekly"))
+S3_BUCKET_MONTHLY = os.environ.get("S3_BUCKET_MONTHLY", config.get("s3_bucket_monthly"))
+S3_BUCKET_YEARLY = os.environ.get("S3_BUCKET_YEARLY", config.get("s3_bucket_yearly"))
 
 LOG_FILE_PATH = os.path.join(os.getcwd(), "aggregator.log")
-LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
-LOG_BACKUP_COUNT = 5
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
-events = boto3.client("events", region_name=AWS_REGION1)
+LOG_MAX_BYTES = config.get("log_max_bytes")
+LOG_BACKUP_COUNT = config.get("log_backup_count")
+LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
+try:
+    HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
+except AttributeError:
+    HOSTNAME = os.getenv("HOSTNAME", "unknown-host")
 
 
 # --- AWS Client ---------------------------------------------------------------
@@ -354,6 +381,110 @@ def run_daily(custom_date: str = None):
     emit_success_event("daily")      # at end of run_daily
     return result
 
+# --- Hourly rollup (aggregate minute data into hourly summaries) --------------
+@log_execution
+def aggregate_hourly():
+    """
+    Aggregate all minute-level data for the previous hour into an hourly summary.
+    """
+    now_ist = datetime.datetime.now(TIMEZONE)
+    # Target the previous completed hour
+    target_hour = (now_ist - datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    
+    year = target_hour.strftime("%Y")
+    month = target_hour.strftime("%Y%m")
+    day = target_hour.strftime("%Y%m%d")
+    hour = target_hour.strftime("%Y%m%d%H")
+    
+    prefix = f"year={year}/month={month}/day={day}/hour={hour}/"
+    log.info(f"Scanning prefix for hourly aggregation: {prefix}")
+
+    downloads, uploads, pings = [], [], []
+    servers = []
+    ips = set()
+    count = 0
+    errors_count = 0
+
+    for key in list_objects(prefix):
+        if not key.endswith(".json"):
+            continue
+        try:
+            rec = read_json(key)
+            dl = parse_mbps(rec.get("download_mbps"))
+            ul = parse_mbps(rec.get("upload_mbps"))
+            ping = parse_float(rec.get("ping_ms"))
+
+            if dl is None or ul is None:
+                errors_count += 1
+                continue
+
+            downloads.append(dl)
+            uploads.append(ul)
+            pings.append(ping)
+            count += 1
+
+            s_name = (rec.get("server_name") or "").strip()
+            s_host = (rec.get("server_host") or "").strip()
+            s_city = (rec.get("server_city") or "").strip()
+            s_country = (rec.get("server_country") or "").strip()
+            parts = [p for p in [s_name, s_host, s_city] if p]
+            label = " – ".join(parts)
+            if s_country:
+                label += f" ({s_country})"
+            servers.append(label)
+
+            ip = rec.get("public_ip")
+            if isinstance(ip, str) and ip:
+                ips.add(ip)
+
+        except Exception as e:
+            log.warning(f"Skipping {key}: {e}")
+            errors_count += 1
+
+    if count == 0:
+        log.warning(f"No data found for hour {hour}")
+        return None
+
+    anomalies = detect_anomalies(downloads, uploads, pings)
+    
+    # Expect 4 records per hour (15-min intervals: 00, 15, 30, 45)
+    # But proceed with partial data (1-4 files) as they become available
+    expected_records = 4
+    completion_rate = (count / expected_records) * 100
+    if count < expected_records:
+        log.info(f"Partial hour data: {count}/{expected_records} records ({completion_rate:.1f}%)")
+        # Note: We still aggregate with whatever data is available
+
+    top_servers = [s for s, _ in Counter(servers).most_common(3)]
+
+    summary = {
+        "hour_ist": target_hour.strftime("%Y-%m-%d %H:00"),
+        "records": count,
+        "completion_rate": round(completion_rate, 1),
+        "errors": errors_count,
+        "overall": {
+            "download_mbps": stats(downloads),
+            "upload_mbps": stats(uploads),
+            "ping_ms": stats(pings),
+        },
+        "servers_top": top_servers,
+        "public_ips": sorted(list(ips)),
+        "anomalies": anomalies,
+        "threshold_mbps": EXPECTED_SPEED_MBPS,
+    }
+
+    # Upload to hourly bucket
+    key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/hourly_summary_{hour}.json"
+    s3.put_object(
+        Bucket=S3_BUCKET_HOURLY,
+        Key=key,
+        Body=json.dumps(summary, indent=2, ensure_ascii=False),
+        ContentType="application/json",
+    )
+    log.info(f"Hourly summary uploaded to s3://{S3_BUCKET_HOURLY}/{key}")
+    emit_success_event("hourly")
+    return summary
+
 # --- Weekly rollup (last completed Mon..Sun) ----------------------------------
 @log_execution
 def aggregate_weekly():
@@ -498,13 +629,15 @@ def aggregate_yearly():
 
 # --- Lambda handler -----------------------------------------------------------
 # ---------------------------------------------------------------------------
-# 🔀 Extended Lambda Handler (supporting "mode": daily|weekly|monthly|yearly)
+# 🔀 Extended Lambda Handler (supporting "mode": hourly|daily|weekly|monthly|yearly)
 # ---------------------------------------------------------------------------
 def lambda_handler(event, context):
     mode = (event or {}).get("mode") if isinstance(event, dict) else None
     log.info(f"Lambda trigger — mode={mode or 'daily'}")
     try:
-        if mode == "weekly":
+        if mode == "hourly":
+            result = aggregate_hourly()
+        elif mode == "weekly":
             result = aggregate_weekly()
         elif mode == "monthly":
             result = aggregate_monthly()
@@ -531,6 +664,7 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     # Local quick tests (uncomment the one you want)
     # print(json.dumps(run_daily(), indent=2))
+    # print(json.dumps(aggregate_hourly(), indent=2))
     # print(json.dumps(aggregate_weekly(), indent=2))
     # print(json.dumps(aggregate_monthly(), indent=2))
     # print(json.dumps(aggregate_yearly(), indent=2))

@@ -20,6 +20,10 @@ Parameters:
     Description: Environment name
 
   # Schedules (UTC). These defaults align with IST requirements.
+  HourlyScheduleExpression:
+    Type: String
+    Default: cron(10 * * * ? *)           # Every hour at :10 (10 min past each hour)
+    Description: Cron for hourly aggregation (every hour at :10)
   DailyScheduleExpression:
     Type: String
     Default: cron(30 0 * * ? *)           # 00:30 UTC = 06:00 IST daily
@@ -56,6 +60,7 @@ Globals:
     Environment:
       Variables:
         S3_BUCKET: !Ref S3BucketName
+        S3_BUCKET_HOURLY: !Sub 'vd-speed-test-hourly-${Environment}'
         S3_BUCKET_WEEKLY: !Sub 'vd-speed-test-weekly-${Environment}'
         S3_BUCKET_MONTHLY: !Sub 'vd-speed-test-monthly-${Environment}'
         S3_BUCKET_YEARLY: !Sub 'vd-speed-test-yearly-${Environment}'
@@ -73,6 +78,22 @@ Globals:
 
 Resources:
   # ---------------- S3 buckets ----------------
+  HourlyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'vd-speed-test-hourly-${Environment}'
+      VersioningConfiguration: { Status: Suspended }
+      LifecycleConfiguration:
+        Rules:
+          - Id: HourlyRetention
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Application
+          Value: vd-speed-test
+        - Key: ManagedBy
+          Value: SAM
+
   WeeklyBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -133,6 +154,8 @@ Resources:
         - S3CrudPolicy:
             BucketName: !Ref S3BucketName
         - S3CrudPolicy:
+            BucketName: !Sub 'vd-speed-test-hourly-${Environment}'
+        - S3CrudPolicy:
             BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
         - S3CrudPolicy:
             BucketName: !Sub 'vd-speed-test-monthly-${Environment}'
@@ -161,6 +184,20 @@ Resources:
           Value: SAM
 
   # -------------- EventBridge Rules --------------
+  HourlyAggregationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'vd-speedtest-hourly-schedule-${Environment}'
+      Description: Trigger hourly aggregation (every hour at :10)
+      ScheduleExpression: !Ref HourlyScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt VdSpeedTestAggregator.Arn
+          Id: LambdaTargetHourly
+          Input: '{"mode":"hourly"}'
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+
   DailyAggregationSchedule:
     Type: AWS::Events::Rule
     Properties:
@@ -218,6 +255,14 @@ Resources:
             MaximumRetryAttempts: 2
 
   # --- Lambda Permissions for EventBridge Schedules (NO DUPLICATES) ---
+  PermissionForHourlySchedule:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VdSpeedTestAggregator
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt HourlyAggregationSchedule.Arn
+
   PermissionForDailySchedule:
     Type: AWS::Lambda::Permission
     Properties:

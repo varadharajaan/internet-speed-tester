@@ -15,14 +15,40 @@ import logging
 from functools import wraps
 from logging.handlers import RotatingFileHandler
 
-# --- Configuration ------------------------------------------------------------
-S3_BUCKET = os.environ.get("S3_BUCKET", "vd-speed-test")
-AWS_REGION1 = "ap-south-1"
+# --- Configuration from config.json --------------------------------------------
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+DEFAULT_CONFIG = {
+    "s3_bucket": "vd-speed-test",
+    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
+    "aws_region": "ap-south-1",
+    "log_level": "INFO",
+    "log_max_bytes": 10485760,
+    "log_backup_count": 5
+}
+
+# Load config
+config = DEFAULT_CONFIG.copy()
+if os.path.exists(CONFIG_PATH):
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config.update(json.load(f))
+    except Exception:
+        pass  # Use defaults if config fails to load
+
+# Extract configuration values (hourly_check only uses daily bucket for minute-level data)
+S3_BUCKET = os.environ.get("S3_BUCKET", config.get("s3_bucket"))
+AWS_REGION1 = os.getenv("AWS_REGION1", config.get("aws_region"))
 LOG_FILE_PATH = os.path.join(os.getcwd(), "hourly_summary.log")
-LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
-LOG_BACKUP_COUNT = 5
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
+LOG_MAX_BYTES = config.get("log_max_bytes")
+LOG_BACKUP_COUNT = config.get("log_backup_count")
+LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
+try:
+    HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
+except AttributeError:
+    HOSTNAME = os.getenv("HOSTNAME", "unknown-host")
 
 s3 = boto3.client("s3", region_name=AWS_REGION1)
 

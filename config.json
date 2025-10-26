@@ -1,4 +1,16 @@
 {
   "expected_speed_mbps": 200,
-  "tolerance_percent": 10
+  "tolerance_percent": 10,
+  "s3_bucket": "vd-speed-test",
+  "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+  "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+  "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+  "s3_bucket_yearly": "vd-speed-test-yearly-prod",
+  "aws_region": "ap-south-1",
+  "timezone": "Asia/Kolkata",
+  "log_level": "INFO",
+  "log_max_bytes": 10485760,
+  "log_backup_count": 5,
+  "speedtest_timeout": 180,
+  "public_ip_api": "https://api.ipify.org"
 }

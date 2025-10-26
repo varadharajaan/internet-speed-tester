@@ -10,16 +10,44 @@ except Exception:
     stlib = None
 
 # ===============================
-# CONFIGURATION
+# CONFIGURATION FROM config.json
 # ===============================
-S3_BUCKET = "vd-speed-test"
-AWS_REGION = "ap-south-1"
-TIMEZONE = pytz.timezone("Asia/Kolkata")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+DEFAULT_CONFIG = {
+    "s3_bucket": "vd-speed-test",
+    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
+    "aws_region": "ap-south-1",
+    "timezone": "Asia/Kolkata",
+    "log_level": "INFO",
+    "log_max_bytes": 10485760,
+    "log_backup_count": 5,
+    "speedtest_timeout": 180,
+    "public_ip_api": "https://api.ipify.org"
+}
+
+# Load config
+config = DEFAULT_CONFIG.copy()
+if os.path.exists(CONFIG_PATH):
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config.update(json.load(f))
+    except Exception as e:
+        print(f"Warning: Failed to load config.json: {e}. Using defaults.")
+
+# Extract configuration values (speed_collector only uses daily bucket for minute-level data)
+S3_BUCKET = os.getenv("S3_BUCKET", config.get("s3_bucket"))
+AWS_REGION = os.getenv("AWS_REGION", config.get("aws_region"))
+TIMEZONE = pytz.timezone(config.get("timezone"))
 HOSTNAME = socket.gethostname()
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
 LOG_FILE_PATH = os.path.join(os.getcwd(), "speedtest.log")
-LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
-LOG_BACKUP_COUNT = 5
+LOG_MAX_BYTES = config.get("log_max_bytes")
+LOG_BACKUP_COUNT = config.get("log_backup_count")
+SPEEDTEST_TIMEOUT = config.get("speedtest_timeout")
+PUBLIC_IP_API = config.get("public_ip_api")
 
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
@@ -104,7 +132,7 @@ def round_to_15min(dt):
 
 def get_public_ip():
     try:
-        ip = requests.get("https://api.ipify.org").text.strip()
+        ip = requests.get(PUBLIC_IP_API).text.strip()
         log.info(f"Public IP: {ip}")
         return ip
     except Exception as e:
@@ -165,7 +193,7 @@ def run_ookla_cli():
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=SPEEDTEST_TIMEOUT,
                 startupinfo=startupinfo,
                 creationflags=creationflags
             )

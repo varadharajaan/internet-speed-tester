@@ -268,17 +268,19 @@
 <body>
   <header>
     <h1>Internet Speed Overview</h1>
-    <form class="toolbar" method="GET">
-      <label for="days">Period:</label>
-      <select id="days" name="days">
-        {% for d in [1,7,14,30,60,90,180,360] %}
-          <option value="{{ d }}" {% if d == days %}selected{% endif %}>Last {{ d }} days</option>
-        {% endfor %}
-      </select>
+    <form class="toolbar" method="GET" id="dashboardForm">
       <label for="mode">Mode:</label>
-      <select id="mode" name="mode">
-        <option value="daily" {% if mode != 'minute' %}selected{% endif %}>Daily</option>
+      <select id="mode" name="mode" onchange="updatePeriodOptions()">
         <option value="minute" {% if mode == 'minute' %}selected{% endif %}>15-min</option>
+        <option value="hourly" {% if mode == 'hourly' %}selected{% endif %}>Hourly</option>
+        <option value="daily" {% if mode == 'daily' %}selected{% endif %}>Daily</option>
+        <option value="weekly" {% if mode == 'weekly' %}selected{% endif %}>Weekly</option>
+        <option value="monthly" {% if mode == 'monthly' %}selected{% endif %}>Monthly</option>
+        <option value="yearly" {% if mode == 'yearly' %}selected{% endif %}>Yearly</option>
+      </select>
+      <label for="days" id="periodLabel">Period:</label>
+      <select id="days" name="days">
+        <!-- Options populated by JavaScript based on mode -->
       </select>
       <label><input type="checkbox" id="urls" name="urls" value="yes" {% if show_urls %}checked{% endif %}> Show URLs</label>
       <label for="threshold">Expected Speed (Mbps):</label>
@@ -416,9 +418,23 @@
       <div style="font-size:24px;font-weight:700">{{ summary.avg_ping }} ms</div>
     </div>
     <div class="card">
-      <div>Days Below Expected Speed</div>
+      <div>
+        {% if mode == 'yearly' %}Years Below Expected Speed
+        {% elif mode == 'monthly' %}Months Below Expected Speed
+        {% elif mode == 'weekly' %}Weeks Below Expected Speed
+        {% elif mode == 'hourly' %}Hours Below Expected Speed
+        {% else %}Days Below Expected Speed
+        {% endif %}
+      </div>
       <div style="font-size:24px;font-weight:700">{{ summary.below_expected }} / {{ summary.total_days }}</div>
-      <div><code class="small">Threshold: {{ threshold }} Mbps</code></div>
+      <div><code class="small">Threshold: {{ threshold }} Mbps 
+        {% if mode == 'yearly' %}for year
+        {% elif mode == 'monthly' %}for month
+        {% elif mode == 'weekly' %}for week
+        {% elif mode == 'hourly' %}for hour
+        {% else %}for day
+        {% endif %}
+      </code></div>
     </div>
     <div class="card" style="grid-column: span 2;">
       <div>Most Used Server (period)</div>
@@ -448,13 +464,27 @@
     </div>
   </div>
 
-  <h2 style="margin-top: 1.5rem;">{{ 'Minute' if mode=='minute' else 'Daily' }} Details</h2>
+  <h2 style="margin-top: 1.5rem;">
+    {% if mode == 'minute' %}Minute-Level Details
+    {% elif mode == 'hourly' %}Hourly Details
+    {% elif mode == 'weekly' %}Weekly Details
+    {% elif mode == 'monthly' %}Monthly Details
+    {% elif mode == 'yearly' %}Yearly Details
+    {% else %}Daily Details
+    {% endif %}
+  </h2>
   <table id="speedTable">
       <thead>
         <tr>
           <th>
             <span class="sort-header" onclick="toggleSort()" id="sortHeader">
-              {{ 'Timestamp (IST)' if mode=='minute' else 'Date' }}
+              {% if mode == 'minute' %}Timestamp (IST)
+              {% elif mode == 'hourly' %}Hour (IST)
+              {% elif mode == 'weekly' %}Week Range
+              {% elif mode == 'monthly' %}Month
+              {% elif mode == 'yearly' %}Year
+              {% else %}Date
+              {% endif %}
               <span class="sort-icon desc" id="sortIcon">⇅</span>
             </span>
           </th>
@@ -509,8 +539,107 @@
 
   <script>
       const threshold = {{ threshold|tojson }};
+      const currentMode = {{ mode|tojson }};
+      const currentPeriod = {{ days|tojson }};
       let chart;
       let allData = {{ data|tojson }};
+      
+      // Period options configuration for each mode
+      const periodOptions = {
+        minute: [
+          {value: 1, label: 'Last 1 day'},
+          {value: 7, label: 'Last 7 days'},
+          {value: 14, label: 'Last 14 days'},
+          {value: 30, label: 'Last 30 days'},
+          {value: 60, label: 'Last 60 days'},
+          {value: 90, label: 'Last 90 days'}
+        ],
+        hourly: [
+          {value: 1, label: 'Last 1 day'},
+          {value: 3, label: 'Last 3 days'},
+          {value: 7, label: 'Last 7 days'},
+          {value: 14, label: 'Last 14 days'},
+          {value: 30, label: 'Last 30 days'},
+          {value: 60, label: 'Last 60 days'},
+          {value: 90, label: 'Last 90 days'}
+        ],
+        daily: [
+          {value: 7, label: 'Last 7 days'},
+          {value: 14, label: 'Last 14 days'},
+          {value: 30, label: 'Last 30 days'},
+          {value: 60, label: 'Last 60 days'},
+          {value: 90, label: 'Last 90 days'},
+          {value: 180, label: 'Last 180 days'},
+          {value: 360, label: 'Last 360 days'}
+        ],
+        weekly: [
+          {value: 4, label: 'Last 4 weeks'},
+          {value: 8, label: 'Last 8 weeks'},
+          {value: 12, label: 'Last 12 weeks'},
+          {value: 26, label: 'Last 26 weeks'},
+          {value: 52, label: 'Last 52 weeks'}
+        ],
+        monthly: [
+          {value: 3, label: 'Last 3 months'},
+          {value: 6, label: 'Last 6 months'},
+          {value: 12, label: 'Last 12 months'},
+          {value: 24, label: 'Last 24 months'},
+          {value: 36, label: 'Last 36 months'}
+        ],
+        yearly: [
+          {value: 1, label: 'Last 1 year'},
+          {value: 2, label: 'Last 2 years'},
+          {value: 3, label: 'Last 3 years'},
+          {value: 5, label: 'Last 5 years'},
+          {value: 10, label: 'Last 10 years'}
+        ]
+      };
+      
+      // Update period dropdown based on selected mode
+      function updatePeriodOptions() {
+        const mode = document.getElementById('mode').value;
+        const periodSelect = document.getElementById('days');
+        const periodLabel = document.getElementById('periodLabel');
+        
+        // Update label text based on mode
+        if (mode === 'weekly') {
+          periodLabel.textContent = 'Period (Weeks):';
+        } else if (mode === 'monthly') {
+          periodLabel.textContent = 'Period (Months):';
+        } else if (mode === 'yearly') {
+          periodLabel.textContent = 'Period (Years):';
+        } else {
+          periodLabel.textContent = 'Period (Days):';
+        }
+        
+        // Clear existing options
+        periodSelect.innerHTML = '';
+        
+        // Get options for selected mode
+        const options = periodOptions[mode] || periodOptions.daily;
+        
+        // Add options
+        options.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          periodSelect.appendChild(option);
+        });
+        
+        // Set default value or keep current if valid
+        const firstValue = options[0].value;
+        const validValues = options.map(o => o.value);
+        if (validValues.includes(currentPeriod)) {
+          periodSelect.value = currentPeriod;
+        } else {
+          periodSelect.value = firstValue;
+        }
+      }
+      
+      // Initialize period options on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        updatePeriodOptions();
+      });
       
       function populateAutocompleteLists() {
         const rows = document.querySelectorAll('#tableBody tr');

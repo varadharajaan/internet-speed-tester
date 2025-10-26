@@ -20,9 +20,10 @@
 | **🚨 CloudWatch Integration** | JSON structured logging with pre-built queries |
 | **📱 Mobile Responsive** | Access dashboard from any device |
 | **🎯 Threshold Monitoring** | Configurable speed expectations with alerts |
-| **🔄 Multi-Level Aggregation** | Daily, Weekly, Monthly, Yearly summaries |
+| **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly summaries |
 | **📊 Advanced Metrics** | Custom CloudWatch metrics with filtering |
 | **⚠️ Smart Alarms** | Multi-level alerting with SNS notifications |
+| **⏰ Hourly Insights** | Automated hourly aggregation with partial data support |
 
 ---
 
@@ -128,6 +129,7 @@ graph TB
 | Component | Purpose | Schedule | Output |
 |-----------|---------|----------|--------|
 | **Speed Collector** | Runs Ookla speedtest, uploads to S3 | Every 15 min (local) | Raw JSON files |
+| **Hourly Aggregator** | Computes hourly stats from 15-min data | Every hour at :10 | `hourly_summary_YYYYMMDDHH.json` |
 | **Daily Aggregator** | Computes daily stats from raw data | 6:00 AM IST | `speed_summary_YYYYMMDD.json` |
 | **Weekly Aggregator** | Rolls up daily data to weekly | Tue 2:00 AM IST | `speed_summary_week_YYYYWW.json` |
 | **Monthly Aggregator** | Rolls up daily data to monthly | 1st 2:00 AM IST | `speed_summary_month_YYYYMM.json` |
@@ -288,7 +290,7 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 
 | Feature | Description | How to Access |
 |---------|-------------|---------------|
-| **🔄 Multi-Level Aggregation** | Daily, Weekly, Monthly, Yearly roll-ups | EventBridge schedules in AWS Console |
+| **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly roll-ups | EventBridge schedules in AWS Console |
 | **📊 Advanced Metrics** | 8+ custom CloudWatch metrics | CloudWatch → Metrics → `vd-speed-test/Logs` |
 | **🔍 Query Definitions** | 4 pre-built Logs Insights queries | CloudWatch → Logs Insights → Saved queries |
 | **⚠️ Smart Alarms** | 7 configured alarms with SNS | CloudWatch → Alarms → vd-speedtest-* |
@@ -296,6 +298,9 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 | **📧 Email Notifications** | Automatic alarm emails via SNS | Check your email inbox |
 | **🗂️ Separate S3 Buckets** | Dedicated buckets per aggregation level | S3 Console → vd-speed-test-* |
 | **⚙️ Configurable Schedules** | Customize via template parameters | SAM template → Parameters |
+| **⏱️ Hourly Insights** | Automatic hourly aggregation at :10 past each hour | S3 hourly bucket + Dashboard |
+| **📊 6-Mode Dashboard** | View data as: 15-min, Hourly, Daily, Weekly, Monthly, Yearly | Dashboard dropdown selector |
+| **🔧 Partial Data Handling** | Works even with incomplete hourly data (1-4 files) | Automatic in hourly aggregation |
 
 ---
 
@@ -317,6 +322,26 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 - **Anomaly Highlighting**: Red markers for issues
 - **Threshold Lines**: Visual speed expectations
 - **Responsive Design**: Mobile-optimized UI
+- **Multi-Mode Views**: Switch between 6 different time granularities
+
+### 🎯 Dashboard Viewing Modes
+
+The dashboard now supports **6 different viewing modes** for flexible data analysis:
+
+| Mode | Description | Time Range | Data Source |
+|------|-------------|------------|-------------|
+| **15-min** | Raw minute-level data | Last 1-360 days | `vd-speed-test` |
+| **Hourly** | Hourly aggregations (NEW) | Last 1-90 days | `vd-speed-test-hourly-prod` |
+| **Daily** | Daily summaries | Last 1-360 days | `vd-speed-test` aggregated |
+| **Weekly** | Weekly roll-ups | Last 1-360 days | `vd-speed-test-weekly-prod` |
+| **Monthly** | Monthly roll-ups | Last 1-360 days | `vd-speed-test-monthly-prod` |
+| **Yearly** | Yearly roll-ups | All years | `vd-speed-test-yearly-prod` |
+
+**Dashboard Features by Mode**:
+- Dynamic table headers (Timestamp/Hour/Date/Week/Month/Year)
+- Mode-specific summary cards (Hours/Days/Weeks/Months/Years below threshold)
+- Contextual threshold labels ("for hour", "for day", "for week", etc.)
+- Automatic data loading from appropriate S3 bucket
 
 ### 🎯 Real-time Metrics
 
@@ -340,6 +365,8 @@ The system implements a sophisticated multi-level aggregation strategy to provid
 ```
 Minute-level Data (Raw)
     ↓
+Hourly Aggregation (Every hour at :10)
+    ↓
 Daily Aggregation (6:00 AM IST)
     ↓
 Weekly Aggregation (Tuesday 2:00 AM IST)
@@ -353,10 +380,39 @@ Yearly Aggregation (Jan 1 2:00 AM IST)
 
 | Aggregation | Schedule | Description | Output Bucket |
 |-------------|----------|-------------|---------------|
+| **Hourly** | `cron(10 * * * ? *)` | Every hour at :10 | `vd-speed-test-hourly-prod/` |
 | **Daily** | `cron(30 0 * * ? *)` | 6:00 AM IST daily | `vd-speed-test/aggregated/` |
 | **Weekly** | `cron(30 20 ? * MON *)` | Tuesday 2:00 AM IST | `vd-speed-test-weekly-prod/` |
 | **Monthly** | `cron(30 20 L * ? *)` | 1st of month 2:00 AM IST | `vd-speed-test-monthly-prod/` |
 | **Yearly** | `cron(30 20 31 12 ? *)` | Jan 1 2:00 AM IST | `vd-speed-test-yearly-prod/` |
+
+### ⏰ Hourly Aggregation Details
+
+**NEW Feature**: Automated hourly aggregation runs at **10 minutes past each hour** (00:10, 01:10, 02:10, etc.)
+
+**Why 10 minutes past?**
+- Speed tests run at :00, :15, :30, :45 of each hour
+- 10-minute buffer ensures all 4 data points are uploaded
+- Aggregation proceeds even with partial data (1-4 files found)
+
+**Partial Data Handling**:
+```python
+# Works with ANY available data
+- 4/4 files: ✅ 100% complete (ideal)
+- 3/4 files: ✅ 75% complete (still useful)
+- 2/4 files: ✅ 50% complete (acceptable)
+- 1/4 files: ✅ 25% complete (minimal but valid)
+- 0/4 files: ❌ Skip aggregation
+```
+
+**Example Timeline**:
+```
+14:00 - Speed test runs (1st data point)
+14:15 - Speed test runs (2nd data point)
+14:30 - Speed test runs (3rd data point)
+14:45 - Speed test runs (4th data point)
+15:10 - Hourly aggregation runs for 14:00-14:59 period
+```
 
 ### 📦 S3 Bucket Structure
 
@@ -369,6 +425,14 @@ s3://vd-speed-test/
               └── hour=2025012512/
                   └── minute=202501251215/
                       └── speed_data_ookla_*.json
+
+# Hourly aggregated data (NEW)
+s3://vd-speed-test-hourly-prod/aggregated/
+  └── year=2025/
+      └── month=202501/
+          └── day=20250125/
+              └── hour=2025012514/
+                  └── hourly_summary_2025012514.json
 
 # Daily aggregated data
 s3://vd-speed-test/aggregated/
@@ -395,6 +459,16 @@ s3://vd-speed-test-yearly-prod/aggregated/
       └── speed_summary_year_2025.json
 ```
 
+### 🗄️ S3 Bucket Lifecycle Policies
+
+| Bucket | Purpose | Retention Policy | Est. Size |
+|--------|---------|------------------|-----------|
+| `vd-speed-test` | Raw 15-min data | User-managed | ~50 MB/day |
+| `vd-speed-test-hourly-prod` | Hourly summaries | 90 days | ~2 MB/day |
+| `vd-speed-test-weekly-prod` | Weekly summaries | 730 days (2 years) | ~50 KB/week |
+| `vd-speed-test-monthly-prod` | Monthly summaries | 1825 days (5 years) | ~15 KB/month |
+| `vd-speed-test-yearly-prod` | Yearly summaries | 3650 days (10 years) | ~5 KB/year |
+
 ### 🎯 Aggregation Metrics
 
 Each aggregation level computes:
@@ -411,6 +485,11 @@ Each aggregation level computes:
 You can manually trigger aggregations using Lambda function URLs:
 
 ```bash
+# Trigger hourly aggregation (NEW)
+curl -X POST "https://[your-aggregator-url]/" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"hourly"}'
+
 # Trigger daily aggregation
 curl -X POST "https://[your-aggregator-url]/" \
   -H "Content-Type: application/json" \
@@ -438,6 +517,9 @@ To modify aggregation schedules, update the `template.yaml` parameters:
 
 ```yaml
 Parameters:
+  HourlyScheduleExpression:
+    Type: String
+    Default: cron(10 * * * ? *)  # Every hour at :10
   DailyScheduleExpression:
     Type: String
     Default: cron(30 0 * * ? *)
@@ -771,6 +853,11 @@ aws cloudformation describe-stacks \
 | `/` | GET | Main dashboard UI | `https://[url]/` |
 | `/api/data` | GET | JSON data endpoint | `https://[url]/api/data` |
 | `/?mode=minute&days=7` | GET | 15-minute granularity view | `https://[url]/?mode=minute&days=7` |
+| `/?mode=hourly&days=7` | GET | Hourly aggregation view (NEW) | `https://[url]/?mode=hourly&days=7` |
+| `/?mode=daily&days=30` | GET | Daily aggregation view | `https://[url]/?mode=daily&days=30` |
+| `/?mode=weekly&days=90` | GET | Weekly aggregation view | `https://[url]/?mode=weekly&days=90` |
+| `/?mode=monthly&days=180` | GET | Monthly aggregation view | `https://[url]/?mode=monthly&days=180` |
+| `/?mode=yearly&days=360` | GET | Yearly aggregation view | `https://[url]/?mode=yearly&days=360` |
 | `/?threshold=150` | GET | Custom threshold view | `https://[url]/?threshold=150` |
 | `/?date=2025-01-25` | GET | Specific date view | `https://[url]/?date=2025-01-25` |
 
@@ -780,6 +867,7 @@ aws cloudformation describe-stacks \
 
 | Mode | Method | Payload | Description |
 |------|--------|---------|-------------|
+| Hourly | POST | `{"mode":"hourly"}` | Aggregate previous hour's data |
 | Daily | POST | `{"mode":"daily"}` | Aggregate yesterday's data |
 | Weekly | POST | `{"mode":"weekly"}` | Aggregate last week |
 | Monthly | POST | `{"mode":"monthly"}` | Aggregate last month |
@@ -787,6 +875,11 @@ aws cloudformation describe-stacks \
 
 **Example Usage**:
 ```bash
+# Hourly aggregation (NEW)
+curl -X POST "https://[aggregator-url]/" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"hourly"}'
+
 # Daily aggregation
 curl -X POST "https://[aggregator-url]/" \
   -H "Content-Type: application/json" \
@@ -845,6 +938,14 @@ s3://vd-speed-test/
             └── day=20250110/
                 └── speed_summary_20250110.json
 
+s3://vd-speed-test-hourly-prod/
+└── aggregated/
+    └── year=2025/
+        └── month=202501/
+            └── day=20250110/
+                └── hour=2025011014/
+                    └── hourly_summary_2025011014.json
+
 s3://vd-speed-test-weekly-prod/
 └── aggregated/
     └── year=2025/
@@ -876,6 +977,7 @@ Configure the system via `template.yaml` parameters during deployment:
 | **NotificationEmail** | String | `varathu09@gmail.com` | Email for alarm notifications |
 | **S3BucketName** | String | `vd-speed-test` | Main bucket for raw data |
 | **Environment** | String | `prod` | Environment name (dev/prod) |
+| **HourlyScheduleExpression** | Cron | `cron(10 * * * ? *)` | Hourly aggregation (every hour at :10) |
 | **DailyScheduleExpression** | Cron | `cron(30 0 * * ? *)` | Daily aggregation schedule (6 AM IST) |
 | **WeeklyScheduleExpression** | Cron | `cron(30 20 ? * MON *)` | Weekly aggregation (Tue 2 AM IST) |
 | **MonthlyScheduleExpression** | Cron | `cron(30 20 L * ? *)` | Monthly aggregation (1st 2 AM IST) |
@@ -892,7 +994,12 @@ Local configuration file for speed thresholds:
   "expected_speed_mbps": 200,
   "tolerance_percent": 10,
   "log_level": "INFO",
-  "retention_days": 30
+  "retention_days": 30,
+  "s3_bucket": "vd-speed-test",
+  "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+  "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+  "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+  "s3_bucket_yearly": "vd-speed-test-yearly-prod"
 }
 ```
 
@@ -903,6 +1010,7 @@ Automatically set by SAM template:
 | Variable | Description | Example Value |
 |----------|-------------|---------------|
 | `S3_BUCKET` | Main raw data bucket | `vd-speed-test` |
+| `S3_BUCKET_HOURLY` | Hourly aggregation bucket | `vd-speed-test-hourly-prod` |
 | `S3_BUCKET_WEEKLY` | Weekly aggregation bucket | `vd-speed-test-weekly-prod` |
 | `S3_BUCKET_MONTHLY` | Monthly aggregation bucket | `vd-speed-test-monthly-prod` |
 | `S3_BUCKET_YEARLY` | Yearly aggregation bucket | `vd-speed-test-yearly-prod` |
@@ -964,6 +1072,9 @@ For local data collection on Windows:
 | **Dashboard shows old data** | Clear browser cache, verify aggregation schedules are enabled |
 | **Missing aggregation buckets** | Redeploy stack to create missing S3 buckets |
 | **Metric filters not populating** | Wait 5-10 minutes for first data, verify log format is JSON |
+| **Hourly aggregation not working** | Check EventBridge rule at :10, verify hourly bucket exists, check Lambda logs |
+| **Dashboard mode dropdown issues** | Ensure all 6 modes exist, check S3 bucket access, verify app.py routes |
+| **Partial hourly data warnings** | Normal behavior - aggregation works with 1-4 files, no action needed |
 
 ### 🔍 Debug Commands
 
@@ -976,6 +1087,7 @@ python lambda_function.py
 
 # Verify S3 data and structure
 aws s3 ls s3://vd-speed-test/ --recursive --summarize
+aws s3 ls s3://vd-speed-test-hourly-prod/ --recursive
 aws s3 ls s3://vd-speed-test-weekly-prod/ --recursive
 aws s3 ls s3://vd-speed-test-monthly-prod/ --recursive
 aws s3 ls s3://vd-speed-test-yearly-prod/ --recursive
@@ -1077,6 +1189,19 @@ cat out.json | jq
      --payload '{"mode":"weekly"}' \
      out-weekly.json
    ```
+
+**Hourly aggregation issues**:
+1. Check EventBridge rule triggers at :10: `aws events describe-rule --name vd-speedtest-hourly-schedule-prod`
+2. Verify hourly bucket exists: `aws s3 ls s3://vd-speed-test-hourly-prod/`
+3. Check Lambda execution logs: `sam logs -n vd-speedtest-daily-aggregator-prod --tail`
+4. Manually test: `aws lambda invoke --function-name vd-speedtest-daily-aggregator-prod --payload '{"mode":"hourly"}' out.json`
+5. Verify partial data handling: Look for "Partial hour data" in logs (this is normal)
+
+**Dashboard mode switching issues**:
+1. Ensure all 5 S3 buckets exist and have data
+2. Check browser console for JavaScript errors
+3. Verify app.py has all 6 load functions (minute, hourly, daily, weekly, monthly, yearly)
+4. Test each mode directly: `http://localhost:8080/?mode=hourly&days=7`
 
 ### 💰 Cost Optimization Tips
 
