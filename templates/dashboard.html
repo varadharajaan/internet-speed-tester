@@ -119,6 +119,15 @@
     }
     .anomaly { color: #b91c1c; font-weight: 600; }
     .bad { color: #b91c1c; font-weight: 700; }
+    .connection-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: 600;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -493,6 +502,7 @@
           <th>Ping (ms)</th>
           <th>Server</th>
           <th>Public IP</th>
+          <th>Connection</th>
           {% if show_urls %}<th>Result URLs</th>{% endif %}
           <th>Notes</th>
         </tr>
@@ -514,6 +524,12 @@
         <td>{{ '%.2f'|format(row.ping_avg or 0) }}</td>
         <td>{{ row.top_server }}</td>
         <td>{{ row.public_ip }}</td>
+        <td>
+          <span class="connection-badge">{{ row.connection_type or 'Unknown' }}</span>
+          {% if row.wifi_name %}
+            <br><small style="color: #6b7280;">{{ row.wifi_name }}</small>
+          {% endif %}
+        </td>
         {% if show_urls %}
         <td>
           {% if row.result_urls and row.result_urls|length > 0 %}

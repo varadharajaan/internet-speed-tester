@@ -244,6 +244,7 @@ def aggregate_for_date(target_dt: datetime.datetime):
     downloads, uploads, pings = [], [], []
     servers, result_urls = [], []
     ips = set()
+    connection_types = []
     count = 0
     errors_count = 0
 
@@ -282,6 +283,10 @@ def aggregate_for_date(target_dt: datetime.datetime):
             ip = rec.get("public_ip")
             if isinstance(ip, str) and ip:
                 ips.add(ip)
+            
+            conn_type = rec.get("connection_type")
+            if conn_type:
+                connection_types.append(conn_type)
 
         except Exception as e:
             log.warning(f"Skipping {key}: {e}")
@@ -303,6 +308,7 @@ def aggregate_for_date(target_dt: datetime.datetime):
         log.warning(f"High error rate: {errors_count} failed records")
 
     top_servers = [s for s, _ in Counter(servers).most_common(5)]
+    top_connection_types = [ct for ct, _ in Counter(connection_types).most_common(3)]
 
     summary = {
         "date_ist": target_dt.strftime("%Y-%m-%d"),
@@ -317,6 +323,7 @@ def aggregate_for_date(target_dt: datetime.datetime):
         "servers_top": top_servers,
         "result_urls": result_urls,
         "public_ips": sorted(list(ips)),
+        "connection_types": top_connection_types,
         "anomalies": anomalies,
         "threshold_mbps": EXPECTED_SPEED_MBPS,
     }
@@ -406,6 +413,7 @@ def aggregate_hourly():
     downloads, uploads, pings = [], [], []
     servers = []
     ips = set()
+    connection_types = []
     count = 0
     errors_count = 0
 
@@ -440,6 +448,10 @@ def aggregate_hourly():
             ip = rec.get("public_ip")
             if isinstance(ip, str) and ip:
                 ips.add(ip)
+            
+            conn_type = rec.get("connection_type")
+            if conn_type:
+                connection_types.append(conn_type)
 
         except Exception as e:
             log.warning(f"Skipping {key}: {e}")
@@ -460,6 +472,7 @@ def aggregate_hourly():
         # Note: We still aggregate with whatever data is available
 
     top_servers = [s for s, _ in Counter(servers).most_common(3)]
+    top_connection_types = [ct for ct, _ in Counter(connection_types).most_common(3)]
 
     summary = {
         "hour_ist": target_hour.strftime("%Y-%m-%d %H:00"),
@@ -473,6 +486,7 @@ def aggregate_hourly():
         },
         "servers_top": top_servers,
         "public_ips": sorted(list(ips)),
+        "connection_types": top_connection_types,
         "anomalies": anomalies,
         "threshold_mbps": EXPECTED_SPEED_MBPS,
     }
@@ -523,6 +537,11 @@ def aggregate_weekly():
         log.warning("No daily summaries found for this week")
         return None
 
+    all_connection_types = []
+    for ds in daily_summaries:
+        all_connection_types.extend(ds.get("connection_types", []))
+    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+
     summary = {
         "week_start": str(this_monday),
         "week_end": str(this_sunday),
@@ -530,6 +549,7 @@ def aggregate_weekly():
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in daily_summaries]), 2),
+        "connection_types": top_connection_types,
     }
 
     week_label = f"{this_monday.strftime('%YW%W')}"
@@ -570,12 +590,18 @@ def aggregate_monthly():
         log.warning(f"No daily summaries found for month {month_tag}")
         return None
 
+    all_connection_types = []
+    for ds in summaries:
+        all_connection_types.extend(ds.get("connection_types", []))
+    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+
     summary = {
         "month": month_tag,
         "days": len(summaries),
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in summaries]), 2),
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in summaries]), 2),
+        "connection_types": top_connection_types,
     }
 
     key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
@@ -612,12 +638,18 @@ def aggregate_yearly():
         log.warning(f"No monthly summaries found for {current_year}")
         return None
 
+    all_connection_types = []
+    for ms in summaries:
+        all_connection_types.extend(ms.get("connection_types", []))
+    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+
     summary = {
         "year": current_year,
         "months_aggregated": len(summaries),
         "avg_download": round(mean([x["avg_download"] for x in summaries]), 2),
         "avg_upload": round(mean([x["avg_upload"] for x in summaries]), 2),
         "avg_ping": round(mean([x["avg_ping"] for x in summaries]), 2),
+        "connection_types": top_connection_types,
     }
 
     key = f"aggregated/year={current_year}/speed_test_summary.json"

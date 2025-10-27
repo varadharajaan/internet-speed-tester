@@ -158,6 +158,9 @@ def load_summaries():
     df["ping_avg"] = df["overall"].apply(lambda x: x.get("ping_ms", {}).get("avg") if isinstance(x, dict) else None)
     df["top_server"] = df["servers_top"].apply(lambda arr: arr[0] if isinstance(arr, list) and arr else "")
     df["result_urls"] = df["result_urls"].apply(lambda x: x if isinstance(x, list) else [])
+    df["connection_type"] = df.get("connection_types", pd.Series([[] for _ in range(len(df))])).apply(
+        lambda x: ", ".join(x) if isinstance(x, list) and x else "Unknown"
+    )
 
     if "public_ips" in df.columns:
         df["public_ips"] = df["public_ips"].apply(lambda x: x if isinstance(x, list) else [])
@@ -197,6 +200,8 @@ def load_minute_data(days):
                     "ping_avg": safe_float(data.get("ping_ms", 0)),
                     "top_server": f"{data.get('server_name', '')} – {data.get('server_host', '')} – {data.get('server_city', '')} ({data.get('server_country', '')})".strip(),
                     "public_ip": data.get("public_ip", ""),
+                    "connection_type": data.get("connection_type", "Unknown"),
+                    "wifi_name": data.get("wifi_name", ""),
                     "result_urls": [data.get("result_url")] if data.get("result_url") else []
                 })
             except Exception as e:
@@ -242,6 +247,8 @@ def load_hourly_data(days):
                     "top_server": data.get("servers_top", [""])[0] if data.get("servers_top") else "",
                     "public_ips": data.get("public_ips", []),
                     "public_ip": data.get("public_ips", [""])[0] if data.get("public_ips") else "",
+                    "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
+                    "wifi_name": "",
                     "result_urls": [],
                     "records": data.get("records", 0),
                     "completion_rate": data.get("completion_rate", 0)
@@ -283,6 +290,7 @@ def load_weekly_data(weeks=52):
                     "upload_avg": data["avg_upload"],
                     "ping_avg": data["avg_ping"],
                     "days": data.get("days", 0),
+                    "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
                     "top_server": "",
                     "public_ips": [],
                     "public_ip": "",
@@ -327,6 +335,7 @@ def load_monthly_data(months=12):
                     "upload_avg": data["avg_upload"],
                     "ping_avg": data["avg_ping"],
                     "days": data.get("days", 0),
+                    "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
                     "top_server": "",
                     "public_ips": [],
                     "public_ip": "",
@@ -370,6 +379,7 @@ def load_yearly_data(years=10):
                     "upload_avg": data["avg_upload"],
                     "ping_avg": data["avg_ping"],
                     "months": data.get("months_aggregated", 0),
+                    "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
                     "top_server": "",
                     "public_ips": [],
                     "public_ip": "",
