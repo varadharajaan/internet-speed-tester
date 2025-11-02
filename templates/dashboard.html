@@ -362,6 +362,28 @@
               placeholder="e.g., 223.178">
         <datalist id="ipList"></datalist>
       </div>
+      
+      <!-- Connection Type Filter -->
+      <div class="filter-group">
+        <label for="connectionTypeFilter">Connection Type</label>
+        <select id="connectionTypeFilter">
+          <option value="">All Types</option>
+          <option value="Ethernet">Ethernet</option>
+          <option value="Wi-Fi 5GHz">Wi-Fi 5GHz</option>
+          <option value="Wi-Fi 2.4GHz">Wi-Fi 2.4GHz</option>
+          <option value="Unknown">Unknown</option>
+        </select>
+      </div>
+      
+      <!-- WiFi Name Filter -->
+      <div class="filter-group">
+        <label for="wifiNameFilter">WiFi Name</label>
+        <input type="text" 
+              id="wifiNameFilter" 
+              list="wifiNameList"
+              placeholder="e.g., Home WiFi">
+        <datalist id="wifiNameList"></datalist>
+      </div>
     </div>
     
     <!-- Quick Filter Checkboxes (Combined Mode) -->
@@ -515,6 +537,8 @@
           data-ping="{{ row.ping_avg or 0 }}" 
           data-server="{{ row.top_server }}" 
           data-ip="{{ row.public_ip }}"
+          data-connection-type="{{ row.connection_type or '' }}"
+          data-wifi-name="{{ row.wifi_name or '' }}"
           data-below="{{ 'true' if row.below_expected else 'false' }}"
           data-drop="{{ 'true' if row.download_anomaly else 'false' }}"
           data-latency="{{ 'true' if row.ping_anomaly else 'false' }}">
@@ -661,13 +685,16 @@
         const rows = document.querySelectorAll('#tableBody tr');
         const servers = new Set();
         const ips = new Set();
+        const wifiNames = new Set();
         
         rows.forEach(row => {
           const server = row.getAttribute('data-server');
           const ip = row.getAttribute('data-ip');
+          const wifiName = row.getAttribute('data-wifi-name');
           
           if (server && server.trim()) servers.add(server);
           if (ip && ip.trim()) ips.add(ip);
+          if (wifiName && wifiName.trim()) wifiNames.add(wifiName);
         });
         
         const serverList = document.getElementById('serverList');
@@ -682,6 +709,13 @@
           const option = document.createElement('option');
           option.value = ip;
           ipList.appendChild(option);
+        });
+        
+        const wifiNameList = document.getElementById('wifiNameList');
+        wifiNames.forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          wifiNameList.appendChild(option);
         });
       }
       
@@ -812,6 +846,16 @@
           // IP filter
           if (ipFilter && !ip.includes(ipFilter)) show = false;
           
+          // Connection type filter
+          const connectionTypeFilter = document.getElementById('connectionTypeFilter').value;
+          const connectionType = row.getAttribute('data-connection-type');
+          if (connectionTypeFilter && connectionType !== connectionTypeFilter) show = false;
+          
+          // WiFi name filter
+          const wifiNameFilter = document.getElementById('wifiNameFilter').value.toLowerCase().trim();
+          const wifiName = row.getAttribute('data-wifi-name').toLowerCase();
+          if (wifiNameFilter && !wifiName.includes(wifiNameFilter)) show = false;
+          
           // Apply filter to table
           if (show) {
             row.classList.remove('filtered-out');
@@ -855,6 +899,8 @@
         document.getElementById('pingMax').value = '';
         document.getElementById('providerFilter').value = '';
         document.getElementById('ipFilter').value = '';
+        document.getElementById('connectionTypeFilter').value = '';
+        document.getElementById('wifiNameFilter').value = '';
         
         // Uncheck all quick filter checkboxes
         document.querySelectorAll('.quick-filter-checkbox input[type="checkbox"]').forEach(cb => {
@@ -937,6 +983,25 @@
         sortTableRows(); // Apply default descending sort
         const totalRows = document.querySelectorAll('#tableBody tr').length;
         updateFilterStats(totalRows, totalRows);
+        
+        // Add event listeners for all filters
+        document.getElementById('dateFrom').addEventListener('change', applyAllFilters);
+        document.getElementById('dateTo').addEventListener('change', applyAllFilters);
+        document.getElementById('downloadMin').addEventListener('input', applyAllFilters);
+        document.getElementById('downloadMax').addEventListener('input', applyAllFilters);
+        document.getElementById('uploadMin').addEventListener('input', applyAllFilters);
+        document.getElementById('uploadMax').addEventListener('input', applyAllFilters);
+        document.getElementById('pingMin').addEventListener('input', applyAllFilters);
+        document.getElementById('pingMax').addEventListener('input', applyAllFilters);
+        document.getElementById('providerFilter').addEventListener('input', applyAllFilters);
+        document.getElementById('ipFilter').addEventListener('input', applyAllFilters);
+        document.getElementById('connectionTypeFilter').addEventListener('change', applyAllFilters);
+        document.getElementById('wifiNameFilter').addEventListener('input', applyAllFilters);
+        
+        // Add event listeners for quick filter checkboxes
+        document.querySelectorAll('.quick-filter-checkbox input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener('change', applyAllFilters);
+        });
       });
 
       // Chart initialization code (same as before)
