@@ -1,7 +1,7 @@
 import os
 
 # Base path where JetBrains products are installed
-base_path = r"C:\Users\varad\AppData\Local\Programs"
+base_path = os.path.join(os.environ["LOCALAPPDATA"], "Programs")
 
 # The correct agent line
 agent_line = "-javaagent:C:\\temp\\sniarbtej.jar=id=sniarbtej,user=Varadhaajan,exp=2098-10-24,force=true"

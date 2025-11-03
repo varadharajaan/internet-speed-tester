@@ -1,4 +1,4 @@
-$basePath = "C:\Users\varad\AppData\Local\Programs"
+$basePath = Join-Path $env:LOCALAPPDATA "Programs"
 $agentLine = "-javaagent:C:\temp\sniarbtej.jar=id=sniarbtej,user=Varadhaajan,exp=2098-10-24,force=true"
 
 # Detect only folders containing JetBrains products
