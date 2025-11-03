@@ -497,9 +497,17 @@
   {% endif %}
 
   <div class="card">
-    <!-- Chart Info Display -->
-    <div id="chartFilterInfo" style="margin-bottom: 1rem; padding: 0.75rem; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 13px;">
-      <strong>📊 Chart View:</strong> <span id="chartInfoText">Showing all connection types</span>
+    <!-- Chart-Level Connection Type Filter -->
+    <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f9fafb; border-radius: 8px; display: flex; align-items: center; gap: 1rem; border: 2px solid #e5e7eb;">
+      <label style="font-weight: 600; margin: 0;">📊 Chart Connection Filter:</label>
+      <select id="chartConnectionFilter" style="padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; flex: 1; max-width: 250px;">
+        <option value="">All Connection Types</option>
+        <option value="Ethernet">Ethernet Only</option>
+        <option value="Wi-Fi 5GHz">Wi-Fi 5GHz Only</option>
+        <option value="Wi-Fi 2.4GHz">Wi-Fi 2.4GHz Only</option>
+        <option value="Unknown">Unknown Only</option>
+      </select>
+      <span id="chartFilterInfo" style="font-size: 13px; color: #6b7280; flex: 1;"></span>
     </div>
     
     <canvas id="speedChart"></canvas>
@@ -507,6 +515,19 @@
       <button id="toggleLabels" style="padding:0.3rem 0.6rem;">Toggle Label View</button>
       <button id="resetZoom" style="padding:0.3rem 0.6rem;">Reset Zoom</button>
     </div>
+  </div>
+
+  <!-- Table-Level Connection Type Filter -->
+  <div style="margin: 1.5rem 0; padding: 0.75rem; background: #f9fafb; border-radius: 8px; display: flex; align-items: center; gap: 1rem; border: 2px solid #e5e7eb;">
+    <label style="font-weight: 600; margin: 0;">📋 Table Connection Filter:</label>
+    <select id="tableConnectionFilter" style="padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; flex: 1; max-width: 250px;">
+      <option value="">All Connection Types</option>
+      <option value="Ethernet">Ethernet Only</option>
+      <option value="Wi-Fi 5GHz">Wi-Fi 5GHz Only</option>
+      <option value="Wi-Fi 2.4GHz">Wi-Fi 2.4GHz Only</option>
+      <option value="Unknown">Unknown Only</option>
+    </select>
+    <span id="tableFilterInfo" style="font-size: 13px; color: #6b7280; flex: 1;"></span>
   </div>
 
   <h2 style="margin-top: 1.5rem;">
@@ -968,21 +989,92 @@
         
         updateFilterStats(visibleCount, totalCount);
         updateConnectionTypeStats(); // Update connection type stats after filtering
-        updateChartInfo(); // Update chart info banner
         updateChart(filteredLabels, filteredDownloads, filteredUploads, filteredPings, filteredColors);
+        
+        // Update chart and table filter states (disable if global filter active)
+        filterChartByConnectionType(filteredLabels.length); // Pass filtered count
+        filterTableByConnectionType();
       }
       
-      // Update chart info display based on active filters
-      function updateChartInfo() {
-        const connectionTypeFilter = document.getElementById('connectionTypeFilter').value;
-        const infoText = document.getElementById('chartInfoText');
+      // Filter chart data by connection type (chart-level filter only)
+      function filterChartByConnectionType(filteredCount = null) {
+        const globalConnectionFilter = document.getElementById('connectionTypeFilter').value;
+        const chartConnectionFilter = document.getElementById('chartConnectionFilter');
+        const selectedType = chartConnectionFilter.value;
+        const infoSpan = document.getElementById('chartFilterInfo');
         
-        if (connectionTypeFilter) {
-          const threshold = getThresholdForConnection(connectionTypeFilter);
-          const minSpeed = getMinimumSpeed(connectionTypeFilter);
-          infoText.innerHTML = `Filtered by <strong>${connectionTypeFilter}</strong> | Threshold: ≥${minSpeed.toFixed(0)} Mbps (${threshold} ±${tolerancePercent}%)`;
+        // If global connection filter is active, disable chart filter and show message
+        if (globalConnectionFilter) {
+          chartConnectionFilter.disabled = true;
+          chartConnectionFilter.value = ''; // Clear local filter
+          const threshold = getThresholdForConnection(globalConnectionFilter);
+          const minSpeed = getMinimumSpeed(globalConnectionFilter);
+          const count = filteredCount !== null ? filteredCount : allData.filter(d => (d.connection_type || 'Unknown') === globalConnectionFilter).length;
+          infoSpan.innerHTML = `<strong>${count} tests</strong> | Threshold: ≥${minSpeed.toFixed(0)} Mbps (${threshold} ±${tolerancePercent}%) | <span style="color: #9ca3af; font-size: 12px;">Global filter</span>`;
+          return; // Don't apply chart-level filter
         } else {
-          infoText.textContent = 'Showing all connection types (use Connection Type filter below to focus on specific type)';
+          chartConnectionFilter.disabled = false;
+        }
+        
+        let filteredData = allData;
+        if (selectedType) {
+          filteredData = allData.filter(d => (d.connection_type || 'Unknown') === selectedType);
+          const threshold = getThresholdForConnection(selectedType);
+          const minSpeed = getMinimumSpeed(selectedType);
+          infoSpan.innerHTML = `<strong>${filteredData.length} tests</strong> | Threshold: ≥${minSpeed.toFixed(0)} Mbps (${threshold} ±${tolerancePercent}%)`;
+        } else {
+          infoSpan.innerHTML = `<strong>All ${filteredData.length} tests</strong> (mixed connection types)`;
+        }
+        
+        const labels = filteredData.map(d => d.date_ist_str);
+        const downloads = filteredData.map(d => d.download_avg);
+        const uploads = filteredData.map(d => d.upload_avg);
+        const pings = filteredData.map(d => d.ping_avg);
+        
+        // Color points based on connection-type-specific threshold
+        const pointColors = filteredData.map(d => {
+          const connType = d.connection_type || 'Unknown';
+          return isBelowExpected(d.download_avg, connType) ? 'red' : undefined;
+        });
+        
+        updateChart(labels, downloads, uploads, pings, pointColors);
+      }
+      
+      // Filter table rows by connection type (table-level filter only)
+      function filterTableByConnectionType() {
+        const globalConnectionFilter = document.getElementById('connectionTypeFilter').value;
+        const tableConnectionFilter = document.getElementById('tableConnectionFilter');
+        const selectedType = tableConnectionFilter.value;
+        const infoSpan = document.getElementById('tableFilterInfo');
+        const rows = document.querySelectorAll('#tableBody tr');
+        
+        // If global connection filter is active, disable table filter and show message
+        if (globalConnectionFilter) {
+          tableConnectionFilter.disabled = true;
+          tableConnectionFilter.value = ''; // Clear local filter
+          infoSpan.innerHTML = `<span style="color: #9ca3af;">(Global filter active)</span>`;
+          return; // Don't apply table-level filter
+        } else {
+          tableConnectionFilter.disabled = false;
+        }
+        
+        let visibleCount = 0;
+        rows.forEach(row => {
+          const rowType = row.getAttribute('data-connection-type') || 'Unknown';
+          if (!selectedType || rowType === selectedType) {
+            row.style.display = '';
+            visibleCount++;
+          } else {
+            row.style.display = 'none';
+          }
+        });
+        
+        if (selectedType) {
+          const threshold = getThresholdForConnection(selectedType);
+          const minSpeed = getMinimumSpeed(selectedType);
+          infoSpan.innerHTML = `<strong>${visibleCount} rows visible</strong> | Threshold: ≥${minSpeed.toFixed(0)} Mbps (${threshold} ±${tolerancePercent}%)`;
+        } else {
+          infoSpan.innerHTML = `<strong>All ${rows.length} rows visible</strong>`;
         }
       }
       
@@ -1093,8 +1185,13 @@
         const totalRows = document.querySelectorAll('#tableBody tr').length;
         updateFilterStats(totalRows, totalRows);
         
-        // Initialize chart info display
-        updateChartInfo();
+        // Initialize chart and table connection filters
+        filterChartByConnectionType();
+        filterTableByConnectionType();
+        
+        // Add event listeners for chart and table connection filters
+        document.getElementById('chartConnectionFilter').addEventListener('change', filterChartByConnectionType);
+        document.getElementById('tableConnectionFilter').addEventListener('change', filterTableByConnectionType);
         
         // Add event listeners for all filters
         document.getElementById('dateFrom').addEventListener('change', applyAllFilters);
