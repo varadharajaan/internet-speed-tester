@@ -500,6 +500,7 @@ def dashboard():
         show_urls=show_urls,
         threshold=threshold,
         default_threshold=DEFAULT_THRESHOLD,
+        tolerance_percent=TOLERANCE_PERCENT,
         mode=mode
     )
 

@@ -430,6 +430,15 @@
     <div class="filter-stats" id="filterStats">
       Showing all results
     </div>
+    
+    <!-- Connection Type Threshold Info -->
+    <div style="margin-top: 1rem; padding: 0.75rem; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 13px;">
+      <strong>📊 Speed Thresholds by Connection (with {{ tolerance_percent }}% tolerance):</strong>
+      <span style="margin-left: 1rem; color: #059669;">Ethernet: ≥180 Mbps (200 ±10%)</span> •
+      <span style="color: #059669;">Wi-Fi 5GHz: ≥180 Mbps (200 ±10%)</span> •
+      <span style="color: #d97706;">Wi-Fi 2.4GHz: ≥90 Mbps (100 ±10%)</span> •
+      <span style="color: #6b7280;">Unknown: ≥135 Mbps (150 ±10%)</span>
+    </div>
   </div>
 
 
@@ -488,6 +497,11 @@
   {% endif %}
 
   <div class="card">
+    <!-- Chart Info Display -->
+    <div id="chartFilterInfo" style="margin-bottom: 1rem; padding: 0.75rem; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 13px;">
+      <strong>📊 Chart View:</strong> <span id="chartInfoText">Showing all connection types</span>
+    </div>
+    
     <canvas id="speedChart"></canvas>
     <div class="chart-toolbar">
       <button id="toggleLabels" style="padding:0.3rem 0.6rem;">Toggle Label View</button>
@@ -579,10 +593,36 @@
 
   <script>
       const threshold = {{ threshold|tojson }};
+      const tolerancePercent = {{ tolerance_percent|tojson }};
       const currentMode = {{ mode|tojson }};
       const currentPeriod = {{ days|tojson }};
       let chart;
       let allData = {{ data|tojson }};
+      
+      // Connection-type-aware thresholds with tolerance
+      const connectionThresholds = {
+        'Ethernet': 200,
+        'Wi-Fi 5GHz': 200,
+        'Wi-Fi 2.4GHz': 100,
+        'Unknown': 150
+      };
+      
+      // Get appropriate threshold for connection type
+      function getThresholdForConnection(connectionType) {
+        return connectionThresholds[connectionType] || threshold;
+      }
+      
+      // Apply tolerance to threshold (e.g., 200 Mbps with 10% tolerance = 180 Mbps minimum)
+      function getMinimumSpeed(connectionType) {
+        const baseThreshold = getThresholdForConnection(connectionType);
+        return baseThreshold * (1 - tolerancePercent / 100);
+      }
+      
+      // Check if speed is below expected for connection type (with tolerance)
+      function isBelowExpected(speed, connectionType) {
+        const minimumSpeed = getMinimumSpeed(connectionType);
+        return speed < minimumSpeed;
+      }
       
       // Period options configuration for each mode
       const periodOptions = {
@@ -680,6 +720,59 @@
       document.addEventListener('DOMContentLoaded', () => {
         updatePeriodOptions();
       });
+      
+      // Calculate and display stats by connection type
+      function updateConnectionTypeStats() {
+        const stats = {};
+        const rows = document.querySelectorAll('#tableBody tr');
+        
+        rows.forEach(row => {
+          const connType = row.getAttribute('data-connection-type') || 'Unknown';
+          const download = parseFloat(row.getAttribute('data-download'));
+          
+          if (!stats[connType]) {
+            stats[connType] = {
+              count: 0,
+              totalSpeed: 0,
+              belowThreshold: 0
+            };
+          }
+          
+          stats[connType].count++;
+          stats[connType].totalSpeed += download;
+          
+          if (isBelowExpected(download, connType)) {
+            stats[connType].belowThreshold++;
+          }
+        });
+        
+        // Display stats
+        let statsHTML = '<div style="margin-top: 1.5rem;"><strong>📈 Stats by Connection Type:</strong><br/>';
+        for (const [type, data] of Object.entries(stats)) {
+          const avgSpeed = (data.totalSpeed / data.count).toFixed(1);
+          const baseThreshold = getThresholdForConnection(type);
+          const minSpeed = getMinimumSpeed(type);
+          const percentage = ((data.belowThreshold / data.count) * 100).toFixed(1);
+          statsHTML += `<div style="margin: 0.5rem 0; padding: 0.5rem; background: #f9fafb; border-radius: 4px;">
+            <strong>${type}</strong>: ${data.count} tests, Avg: ${avgSpeed} Mbps (Min: ≥${minSpeed.toFixed(0)} Mbps = ${baseThreshold} Mbps ±${tolerancePercent}%) | 
+            <span style="color: ${data.belowThreshold > 0 ? '#dc2626' : '#059669'}">
+              ${data.belowThreshold} below minimum (${percentage}%)
+            </span>
+          </div>`;
+        }
+        statsHTML += '</div>';
+        
+        const existingStats = document.getElementById('connectionTypeStats');
+        if (existingStats) {
+          existingStats.innerHTML = statsHTML;
+        } else {
+          const filterPanel = document.querySelector('.filter-panel');
+          const newDiv = document.createElement('div');
+          newDiv.id = 'connectionTypeStats';
+          newDiv.innerHTML = statsHTML;
+          filterPanel.appendChild(newDiv);
+        }
+      }
       
       function populateAutocompleteLists() {
         const rows = document.querySelectorAll('#tableBody tr');
@@ -804,7 +897,8 @@
           const ping = parseFloat(row.getAttribute('data-ping'));
           const server = row.getAttribute('data-server').toLowerCase();
           const ip = row.getAttribute('data-ip').toLowerCase();
-          const belowThreshold = row.getAttribute('data-below') === 'true';
+          const connectionType = row.getAttribute('data-connection-type');
+          const belowThreshold = isBelowExpected(download, connectionType);
           
           // Date range filter
           if (dateFrom || dateTo) {
@@ -848,7 +942,6 @@
           
           // Connection type filter
           const connectionTypeFilter = document.getElementById('connectionTypeFilter').value;
-          const connectionType = row.getAttribute('data-connection-type');
           if (connectionTypeFilter && connectionType !== connectionTypeFilter) show = false;
           
           // WiFi name filter
@@ -874,7 +967,23 @@
         });
         
         updateFilterStats(visibleCount, totalCount);
+        updateConnectionTypeStats(); // Update connection type stats after filtering
+        updateChartInfo(); // Update chart info banner
         updateChart(filteredLabels, filteredDownloads, filteredUploads, filteredPings, filteredColors);
+      }
+      
+      // Update chart info display based on active filters
+      function updateChartInfo() {
+        const connectionTypeFilter = document.getElementById('connectionTypeFilter').value;
+        const infoText = document.getElementById('chartInfoText');
+        
+        if (connectionTypeFilter) {
+          const threshold = getThresholdForConnection(connectionTypeFilter);
+          const minSpeed = getMinimumSpeed(connectionTypeFilter);
+          infoText.innerHTML = `Filtered by <strong>${connectionTypeFilter}</strong> | Threshold: ≥${minSpeed.toFixed(0)} Mbps (${threshold} ±${tolerancePercent}%)`;
+        } else {
+          infoText.textContent = 'Showing all connection types (use Connection Type filter below to focus on specific type)';
+        }
       }
       
       function updateChart(labels, downloads, uploads, pings, colors) {
@@ -975,14 +1084,17 @@
       document.addEventListener('DOMContentLoaded', () => {
         sortTableRows(); // Sort latest first by default
       });
-
       
       // Replace or merge with your existing DOMContentLoaded listener
       window.addEventListener('DOMContentLoaded', () => {
         populateAutocompleteLists();
+        updateConnectionTypeStats(); // Show connection type breakdown
         sortTableRows(); // Apply default descending sort
         const totalRows = document.querySelectorAll('#tableBody tr').length;
         updateFilterStats(totalRows, totalRows);
+        
+        // Initialize chart info display
+        updateChartInfo();
         
         // Add event listeners for all filters
         document.getElementById('dateFrom').addEventListener('change', applyAllFilters);

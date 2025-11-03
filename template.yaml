@@ -508,90 +508,87 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-aggregator-errors-${Environment}'
-      AlarmDescription: Alert when aggregator has errors
+      AlarmDescription: Alert when aggregator has ANY errors in last 6 hours (runs hourly)
       MetricName: AggregatorErrors
       Namespace: vd-speed-test/Logs
       Statistic: Sum
-      Period: 3600
+      Period: 21600
       EvaluationPeriods: 1
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   AggregatorWarningAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-aggregator-warnings-${Environment}'
-      AlarmDescription: Alert when aggregator has many warnings
+      AlarmDescription: Alert when aggregator has 20+ warnings in 24 hours
       MetricName: AggregatorWarnings
       Namespace: vd-speed-test/Logs
       Statistic: Sum
       Period: 86400
       EvaluationPeriods: 1
-      Threshold: 10
+      Threshold: 20
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   DashboardErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-dashboard-errors-${Environment}'
-      AlarmDescription: Alert when dashboard has errors
+      AlarmDescription: Alert when dashboard has 5+ errors in last 2 hours
       MetricName: DashboardErrors
       Namespace: vd-speed-test/Logs
       Statistic: Sum
       Period: 3600
-      EvaluationPeriods: 1
-      Threshold: 0
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 5
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   HourlyCheckerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-checker-errors-${Environment}'
-      AlarmDescription: Alert when hourly checker has errors
+      AlarmDescription: Alert when hourly checker has 5+ errors in last 2 hours
       MetricName: HourlyCheckerErrors
       Namespace: vd-speed-test/Logs
       Statistic: Sum
       Period: 3600
-      EvaluationPeriods: 1
-      Threshold: 0
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 5
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   AggregatorLambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-lambda-aggregator-error-${Environment}'
-      AlarmDescription: Lambda function errors for aggregator
+      AlarmDescription: Lambda invocation failures - 2+ failures in 6 hours indicates persistent issue
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
         - Name: FunctionName
           Value: !Ref VdSpeedTestAggregator
       Statistic: Sum
-      Period: 3600
+      Period: 21600
       EvaluationPeriods: 1
-      Threshold: 0
+      Threshold: 1
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   DashboardLambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-lambda-dashboard-error-${Environment}'
-      AlarmDescription: Lambda function errors for dashboard
+      AlarmDescription: Dashboard Lambda errors - 10+ failures in 1 hour indicates serious issue
       MetricName: Errors
       Namespace: AWS/Lambda
       Dimensions:
@@ -600,27 +597,26 @@ Resources:
       Statistic: Sum
       Period: 3600
       EvaluationPeriods: 1
-      Threshold: 0
+      Threshold: 10
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   DataCollectionFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub 'vd-speedtest-data-collection-failure-${Environment}'
-      AlarmDescription: Alert when no data collected for 2 days
+      AlarmDescription: CRITICAL - No successful data collection in 48 hours
       MetricName: DataCollectionRuns
       Namespace: vd-speed-test/Logs
       Statistic: Sum
-      Period: 172800
-      EvaluationPeriods: 1
+      Period: 86400
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
       Threshold: 1
       ComparisonOperator: LessThanThreshold
       TreatMissingData: breaching
       AlarmActions: [ !Ref AlertsTopic ]
-      OKActions: [ !Ref AlertsTopic ]
 
   # ---------------------------------------------------------------------------
   # CloudWatch Logs Insights Query Definitions
