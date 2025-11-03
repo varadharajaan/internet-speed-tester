@@ -402,7 +402,7 @@ Resources:
       MetricTransformations:
         - MetricName: AggregatorErrors
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -414,7 +414,7 @@ Resources:
       MetricTransformations:
         - MetricName: AggregatorWarnings
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -426,7 +426,7 @@ Resources:
       MetricTransformations:
         - MetricName: AggregatorSuccess
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -438,7 +438,7 @@ Resources:
       MetricTransformations:
         - MetricName: DashboardErrors
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -450,7 +450,7 @@ Resources:
       MetricTransformations:
         - MetricName: DashboardWarnings
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -462,7 +462,7 @@ Resources:
       MetricTransformations:
         - MetricName: HourlyCheckerErrors
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -474,7 +474,7 @@ Resources:
       MetricTransformations:
         - MetricName: HourlyCheckerWarnings
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
@@ -486,7 +486,7 @@ Resources:
       MetricTransformations:
         - MetricName: DataCollectionRuns
           MetricNamespace: vd-speed-test/Logs
-          MetricValue: 1
+          MetricValue: "1"
           DefaultValue: 0
           Unit: Count
 
