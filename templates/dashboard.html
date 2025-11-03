@@ -1109,7 +1109,10 @@
         });
         
         const rows = document.querySelectorAll('#tableBody tr');
-        rows.forEach(row => row.classList.remove('filtered-out'));
+        rows.forEach(row => {
+          row.classList.remove('filtered-out');
+          row.style.display = ''; // Clear table-level filter display
+        });
         
         const labels = allData.map(d => d.date_ist_str);
         const downloads = allData.map(d => d.download_avg);
@@ -1120,6 +1123,11 @@
         
         updateChart(labels, downloads, uploads, pings, pointColors);
         updateFilterStats(rows.length, rows.length);
+        updateConnectionTypeStats(); // Update connection type stats
+        
+        // Re-enable and update chart/table filters
+        filterChartByConnectionType(allData.length);
+        filterTableByConnectionType();
       }
       
       function updateFilterStats(visible, total) {
