@@ -48,7 +48,7 @@ Parameters:
 
   TolerancePercent:
     Type: Number
-    Default: 10
+    Default: "10"
     Description: Tolerance percentage for speed variations
 
 Globals:
