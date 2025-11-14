@@ -535,8 +535,8 @@
                 <p class="text-sm text-gray-700 text-center">
                     <strong>📊 Quick Guide:</strong> 
                     <span class="font-semibold text-blue-700">P50</span> = Typical speed (half are faster, half slower) | 
-                    <span class="font-semibold text-indigo-700">P95</span> = 95% of tests were this fast or faster than the value | 
-                    <span class="font-semibold text-purple-700">P99</span> = Peak performance (99% achieved this or better than the value)
+                    <span class="font-semibold text-indigo-700">P95</span> = 95% of tests were this fast or faster than this value | 
+                    <span class="font-semibold text-purple-700">P99</span> = Peak performance (99% achieved this or better than this value)
                 </p>
                 <p class="text-xs text-gray-600 text-center mt-2">
                     💡 <strong>For Download/Upload:</strong> Higher percentiles = Better performance | 
@@ -868,36 +868,15 @@
             </div>
         </div>
 
-        <!-- Connection Type Comparison Charts -->
+        <!-- Connection Type Comparison Chart -->
         <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
             <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                 <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
-                📡 Performance by Connection Type <span class="text-sm font-normal text-gray-500 ml-2">(Side-by-Side Comparison)</span>
+                📡 Performance by Connection Type <span class="text-sm font-normal text-gray-500 ml-2">(Download & Upload Comparison)</span>
             </h3>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Download by Connection Type -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-700 mb-3 flex items-center">
-                        <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
-                        </svg>
-                        Download Speed by Connection
-                    </h4>
-                    <div id="downloadByConnectionChart" class="chart-container"></div>
-                </div>
-                <!-- Upload by Connection Type -->
-                <div>
-                    <h4 class="text-md font-semibold text-gray-700 mb-3 flex items-center">
-                        <svg class="w-4 h-4 mr-1 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                        </svg>
-                        Upload Speed by Connection
-                    </h4>
-                    <div id="uploadByConnectionChart" class="chart-container"></div>
-                </div>
-            </div>
+            <div id="connectionTypeChart" style="height: 450px;"></div>
         </div>
 
         <!-- Data Table -->
@@ -1502,7 +1481,7 @@
             window.addEventListener('resize', () => pingChart.resize());
         }
 
-        // Initialize Connection Type Comparison Charts
+        // Initialize Connection Type Comparison Chart (Combined Download & Upload)
         function initConnectionTypeCharts() {
             // Group data by connection type
             const connectionData = {};
@@ -1521,131 +1500,172 @@
                 connectionData[connection].timestamps.push(timestamp);
             });
 
-            // Color palette for different connection types
+            // Color palette - brighter for download, darker/different hue for upload
             const colorMap = {
-                'wifi': '#6366f1',      // Indigo
-                'ethernet': '#10b981',  // Green
-                'mobile': '#f59e0b',    // Amber
-                'Unknown': '#6b7280'    // Gray
+                'wifi': { download: '#6366f1', upload: '#8b5cf6' },      // Indigo → Violet
+                'ethernet': { download: '#10b981', upload: '#06b6d4' },  // Green → Cyan
+                'mobile': { download: '#f59e0b', upload: '#ef4444' },    // Amber → Red
+                'Unknown': { download: '#6b7280', upload: '#9ca3af' }    // Gray → Light Gray
             };
 
-            // Download by Connection Chart
-            const downloadChart = echarts.init(document.getElementById('downloadByConnectionChart'));
-            const downloadSeries = Object.keys(connectionData).map(conn => ({
-                name: conn.charAt(0).toUpperCase() + conn.slice(1),
-                type: 'line',
-                smooth: true,
-                symbol: 'circle',
-                symbolSize: 4,
-                data: connectionData[conn].download,
-                itemStyle: {
-                    color: colorMap[conn] || '#6b7280'
-                },
-                lineStyle: {
-                    width: 2
-                }
-            }));
-
-            downloadChart.setOption({
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'axis',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    borderColor: '#e5e7eb',
-                    borderWidth: 1,
-                    textStyle: { color: '#1f2937' }
-                },
-                legend: {
-                    data: Object.keys(connectionData).map(c => c.charAt(0).toUpperCase() + c.slice(1)),
-                    top: 5,
-                    textStyle: { color: '#4b5563', fontSize: 11 }
-                },
-                grid: {
-                    left: '3%',
-                    right: '4%',
-                    bottom: '3%',
-                    top: '15%',
-                    containLabel: true
-                },
-                xAxis: {
-                    type: 'category',
-                    boundaryGap: false,
-                    data: chartData.timestamps,
-                    axisLine: { lineStyle: { color: '#d1d5db' } },
-                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 9 }
-                },
-                yAxis: {
-                    type: 'value',
-                    name: 'Mbps',
-                    nameTextStyle: { color: '#6b7280', fontSize: 11 },
-                    axisLine: { lineStyle: { color: '#d1d5db' } },
-                    axisLabel: { color: '#6b7280' },
-                    splitLine: { lineStyle: { color: '#f3f4f6' } }
-                },
-                series: downloadSeries
+            // Create combined series for both download and upload
+            const combinedSeries = [];
+            const legendData = [];
+            
+            Object.keys(connectionData).forEach(conn => {
+                const connName = conn.charAt(0).toUpperCase() + conn.slice(1);
+                legendData.push(connName); // Only add connection name once to legend
+                
+                // Download series - solid line
+                combinedSeries.push({
+                    name: connName,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    data: connectionData[conn].download,
+                    itemStyle: {
+                        color: colorMap[conn]?.download || '#6b7280'
+                    },
+                    lineStyle: {
+                        width: 3,
+                        type: 'solid'
+                    },
+                    // Add custom label to show this is download in tooltip
+                    encode: { tooltip: [1] }
+                });
+                
+                // Upload series - dashed line with different color
+                combinedSeries.push({
+                    name: connName,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'triangle',
+                    symbolSize: 6,
+                    data: connectionData[conn].upload,
+                    itemStyle: {
+                        color: colorMap[conn]?.upload || '#9ca3af'
+                    },
+                    lineStyle: {
+                        width: 2.5,
+                        type: 'dashed'
+                    }
+                });
             });
 
-            // Upload by Connection Chart
-            const uploadChart = echarts.init(document.getElementById('uploadByConnectionChart'));
-            const uploadSeries = Object.keys(connectionData).map(conn => ({
-                name: conn.charAt(0).toUpperCase() + conn.slice(1),
-                type: 'line',
-                smooth: true,
-                symbol: 'circle',
-                symbolSize: 4,
-                data: connectionData[conn].upload,
-                itemStyle: {
-                    color: colorMap[conn] || '#6b7280'
-                },
-                lineStyle: {
-                    width: 2
-                }
-            }));
-
-            uploadChart.setOption({
+            // Initialize combined chart
+            const connectionChart = echarts.init(document.getElementById('connectionTypeChart'));
+            
+            connectionChart.setOption({
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
                     backgroundColor: 'rgba(255, 255, 255, 0.95)',
                     borderColor: '#e5e7eb',
                     borderWidth: 1,
-                    textStyle: { color: '#1f2937' }
+                    textStyle: { color: '#1f2937' },
+                    formatter: function(params) {
+                        let result = '<strong>' + params[0].axisValue + '</strong><br/>';
+                        
+                        // Group by connection type
+                        const grouped = {};
+                        params.forEach(param => {
+                            if (!grouped[param.seriesName]) {
+                                grouped[param.seriesName] = { download: null, upload: null };
+                            }
+                            // Solid line = download, dashed = upload
+                            if (param.seriesIndex % 2 === 0) {
+                                grouped[param.seriesName].download = param.value;
+                            } else {
+                                grouped[param.seriesName].upload = param.value;
+                            }
+                        });
+                        
+                        // Format output
+                        Object.keys(grouped).forEach(connName => {
+                            result += '<div style="margin: 4px 0;">';
+                            result += '<strong>' + connName + ':</strong><br/>';
+                            if (grouped[connName].download !== null) {
+                                result += '&nbsp;&nbsp;⬇️ Download: <b>' + grouped[connName].download.toFixed(2) + ' Mbps</b><br/>';
+                            }
+                            if (grouped[connName].upload !== null) {
+                                result += '&nbsp;&nbsp;⬆️ Upload: <b>' + grouped[connName].upload.toFixed(2) + ' Mbps</b>';
+                            }
+                            result += '</div>';
+                        });
+                        
+                        return result;
+                    }
                 },
                 legend: {
-                    data: Object.keys(connectionData).map(c => c.charAt(0).toUpperCase() + c.slice(1)),
-                    top: 5,
-                    textStyle: { color: '#4b5563', fontSize: 11 }
+                    data: legendData,
+                    top: 10,
+                    textStyle: { color: '#4b5563', fontSize: 12, fontWeight: 600 },
+                    itemGap: 20
                 },
                 grid: {
                     left: '3%',
                     right: '4%',
-                    bottom: '3%',
+                    bottom: '8%',
                     top: '15%',
                     containLabel: true
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none'
+                        },
+                        restore: {},
+                        saveAsImage: {
+                            name: 'connection_type_comparison',
+                            pixelRatio: 2
+                        }
+                    },
+                    iconStyle: {
+                        borderColor: '#667eea'
+                    },
+                    top: 10,
+                    right: 20
                 },
                 xAxis: {
                     type: 'category',
                     boundaryGap: false,
                     data: chartData.timestamps,
                     axisLine: { lineStyle: { color: '#d1d5db' } },
-                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 9 }
+                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 10 }
                 },
                 yAxis: {
                     type: 'value',
-                    name: 'Mbps',
-                    nameTextStyle: { color: '#6b7280', fontSize: 11 },
+                    name: 'Speed (Mbps)',
+                    nameTextStyle: { color: '#6b7280', fontSize: 12 },
                     axisLine: { lineStyle: { color: '#d1d5db' } },
                     axisLabel: { color: '#6b7280' },
                     splitLine: { lineStyle: { color: '#f3f4f6' } }
                 },
-                series: uploadSeries
+                series: combinedSeries,
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        start: 0,
+                        end: 100,
+                        handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: '#667eea'
+                        },
+                        textStyle: {
+                            color: '#6b7280'
+                        }
+                    }
+                ]
             });
 
             // Responsive resize
-            window.addEventListener('resize', () => {
-                downloadChart.resize();
-                uploadChart.resize();
-            });
+            window.addEventListener('resize', () => connectionChart.resize());
         }
 
         // Initialize charts on page load
