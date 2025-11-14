@@ -653,7 +653,8 @@ def dashboard():
         "timestamps": timestamps,
         "download": df["download_avg"].fillna(0).tolist() if not df.empty and "download_avg" in df.columns else [],
         "upload": df["upload_avg"].fillna(0).tolist() if not df.empty and "upload_avg" in df.columns else [],
-        "ping": df["ping_avg"].fillna(0).tolist() if not df.empty and "ping_avg" in df.columns else []
+        "ping": df["ping_avg"].fillna(0).tolist() if not df.empty and "ping_avg" in df.columns else [],
+        "connection_types": df["connection_type"].fillna("Unknown").tolist() if not df.empty and "connection_type" in df.columns else []
     }
     
     # Stats summary with total_tests

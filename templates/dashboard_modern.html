@@ -531,7 +531,18 @@
                     </div>
                 </div>
             </div>
-            <p class="text-xs text-gray-500 mt-4 text-center">💡 <strong>Download/Upload:</strong> P50 = 50% were faster | P95 = 95% faster | P99 = 99% faster<br><strong>Ping:</strong> P50 = 50% had lower latency | P95 = 95% lower | P99 = 99% lower (lower is better)</p>
+            <div class="mt-4 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                <p class="text-sm text-gray-700 text-center">
+                    <strong>📊 Quick Guide:</strong> 
+                    <span class="font-semibold text-blue-700">P50</span> = Typical speed (half are faster, half slower) | 
+                    <span class="font-semibold text-indigo-700">P95</span> = 95% of tests were this fast or faster than the value | 
+                    <span class="font-semibold text-purple-700">P99</span> = Peak performance (99% achieved this or better than the value)
+                </p>
+                <p class="text-xs text-gray-600 text-center mt-2">
+                    💡 <strong>For Download/Upload:</strong> Higher percentiles = Better performance | 
+                    <strong>For Ping:</strong> Lower percentiles = Better latency (lower ping is better!)
+                </p>
+            </div>
         </div>
         {% endif %}
 
@@ -854,6 +865,38 @@
                     Ping Latency
                 </h3>
                 <div id="pingChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Connection Type Comparison Charts -->
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                📡 Performance by Connection Type <span class="text-sm font-normal text-gray-500 ml-2">(Side-by-Side Comparison)</span>
+            </h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Download by Connection Type -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                        </svg>
+                        Download Speed by Connection
+                    </h4>
+                    <div id="downloadByConnectionChart" class="chart-container"></div>
+                </div>
+                <!-- Upload by Connection Type -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload Speed by Connection
+                    </h4>
+                    <div id="uploadByConnectionChart" class="chart-container"></div>
+                </div>
             </div>
         </div>
 
@@ -1459,10 +1502,157 @@
             window.addEventListener('resize', () => pingChart.resize());
         }
 
+        // Initialize Connection Type Comparison Charts
+        function initConnectionTypeCharts() {
+            // Group data by connection type
+            const connectionData = {};
+            
+            chartData.timestamps.forEach((timestamp, index) => {
+                const connection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
+                if (!connectionData[connection]) {
+                    connectionData[connection] = {
+                        download: [],
+                        upload: [],
+                        timestamps: []
+                    };
+                }
+                connectionData[connection].download.push(chartData.download[index]);
+                connectionData[connection].upload.push(chartData.upload[index]);
+                connectionData[connection].timestamps.push(timestamp);
+            });
+
+            // Color palette for different connection types
+            const colorMap = {
+                'wifi': '#6366f1',      // Indigo
+                'ethernet': '#10b981',  // Green
+                'mobile': '#f59e0b',    // Amber
+                'Unknown': '#6b7280'    // Gray
+            };
+
+            // Download by Connection Chart
+            const downloadChart = echarts.init(document.getElementById('downloadByConnectionChart'));
+            const downloadSeries = Object.keys(connectionData).map(conn => ({
+                name: conn.charAt(0).toUpperCase() + conn.slice(1),
+                type: 'line',
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 4,
+                data: connectionData[conn].download,
+                itemStyle: {
+                    color: colorMap[conn] || '#6b7280'
+                },
+                lineStyle: {
+                    width: 2
+                }
+            }));
+
+            downloadChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: { color: '#1f2937' }
+                },
+                legend: {
+                    data: Object.keys(connectionData).map(c => c.charAt(0).toUpperCase() + c.slice(1)),
+                    top: 5,
+                    textStyle: { color: '#4b5563', fontSize: 11 }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData.timestamps,
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 9 }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Mbps',
+                    nameTextStyle: { color: '#6b7280', fontSize: 11 },
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280' },
+                    splitLine: { lineStyle: { color: '#f3f4f6' } }
+                },
+                series: downloadSeries
+            });
+
+            // Upload by Connection Chart
+            const uploadChart = echarts.init(document.getElementById('uploadByConnectionChart'));
+            const uploadSeries = Object.keys(connectionData).map(conn => ({
+                name: conn.charAt(0).toUpperCase() + conn.slice(1),
+                type: 'line',
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 4,
+                data: connectionData[conn].upload,
+                itemStyle: {
+                    color: colorMap[conn] || '#6b7280'
+                },
+                lineStyle: {
+                    width: 2
+                }
+            }));
+
+            uploadChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: { color: '#1f2937' }
+                },
+                legend: {
+                    data: Object.keys(connectionData).map(c => c.charAt(0).toUpperCase() + c.slice(1)),
+                    top: 5,
+                    textStyle: { color: '#4b5563', fontSize: 11 }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData.timestamps,
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 9 }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Mbps',
+                    nameTextStyle: { color: '#6b7280', fontSize: 11 },
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280' },
+                    splitLine: { lineStyle: { color: '#f3f4f6' } }
+                },
+                series: uploadSeries
+            });
+
+            // Responsive resize
+            window.addEventListener('resize', () => {
+                downloadChart.resize();
+                uploadChart.resize();
+            });
+        }
+
         // Initialize charts on page load
         document.addEventListener('DOMContentLoaded', function() {
             initSpeedChart();
             initPingChart();
+            initConnectionTypeCharts();
             updatePeriodLabel(); // Initialize period label
             
             // Add event listener for view mode changes
