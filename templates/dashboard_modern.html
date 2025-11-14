@@ -1517,7 +1517,7 @@
                     return '#e26036'; // Orange-Red for 2.4GHz
                 }
                 if (conn === 'Wi-Fi 5GHz') {
-                    return '#0ee38a'; // Bright Green for 5GHz
+                    return '#38686f'; // Teal for 5GHz
                 }
                 if (conn === 'Ethernet') {
                     return '#462749'; // Dark Purple for Ethernet
@@ -1529,7 +1529,7 @@
                 // Fallback for any other variations
                 const connLower = conn.toLowerCase();
                 if (connLower.includes('2.4')) return '#e26036';
-                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#0ee38a';
+                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#38686f';
                 if (connLower.includes('ethernet')) return '#462749';
                 
                 return '#ad3852'; // Raspberry Red
