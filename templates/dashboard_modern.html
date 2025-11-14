@@ -1514,7 +1514,7 @@
                 
                 // Exact match for each connection type with custom colors
                 if (conn === 'Wi-Fi 2.4GHz') {
-                    return '#ff9f1c'; // Orange for 2.4GHz
+                    return '#e26036'; // Orange-Red for 2.4GHz
                 }
                 if (conn === 'Wi-Fi 5GHz') {
                     return '#0ee38a'; // Bright Green for 5GHz
@@ -1523,16 +1523,16 @@
                     return '#462749'; // Dark Purple for Ethernet
                 }
                 if (conn === 'Unknown') {
-                    return '#540b0e'; // Dark Red for Unknown
+                    return '#ad3852'; // Raspberry Red for Unknown
                 }
                 
                 // Fallback for any other variations
                 const connLower = conn.toLowerCase();
-                if (connLower.includes('2.4')) return '#ff9f1c';
+                if (connLower.includes('2.4')) return '#e26036';
                 if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#0ee38a';
                 if (connLower.includes('ethernet')) return '#462749';
                 
-                return '#540b0e'; // Dark Red
+                return '#ad3852'; // Raspberry Red
             }
 
             // Create combined series for both download and upload
