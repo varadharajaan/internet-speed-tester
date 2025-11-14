@@ -1500,12 +1500,17 @@
                 connectionData[connection].timestamps.push(timestamp);
             });
 
-            // Color palette - brighter for download, darker/different hue for upload
+            // Single color per connection type - visible against white background
             const colorMap = {
-                'wifi': { download: '#6366f1', upload: '#8b5cf6' },      // Indigo → Violet
-                'ethernet': { download: '#10b981', upload: '#06b6d4' },  // Green → Cyan
-                'mobile': { download: '#f59e0b', upload: '#ef4444' },    // Amber → Red
-                'Unknown': { download: '#6b7280', upload: '#9ca3af' }    // Gray → Light Gray
+                'wifi 2.4ghz': '#f59e0b',        // Amber/Orange - warm and visible
+                'wi-fi 2.4ghz': '#f59e0b',       // Amber/Orange (alternative naming)
+                'wifi 5ghz': '#10b981',          // Emerald Green - fresh and clear
+                'wi-fi 5ghz': '#10b981',         // Emerald Green (alternative naming)
+                'ethernet': '#3b82f6',           // Bright Blue - strong and visible
+                'mobile': '#8b5cf6',             // Purple - distinct and vibrant
+                'unknown': '#ef4444',            // Red - attention-grabbing
+                'wifi': '#f59e0b',               // Default WiFi - Amber
+                'wi-fi': '#f59e0b'               // Default WiFi - Amber
             };
 
             // Create combined series for both download and upload
@@ -1514,9 +1519,12 @@
             
             Object.keys(connectionData).forEach(conn => {
                 const connName = conn.charAt(0).toUpperCase() + conn.slice(1);
+                const connLower = conn.toLowerCase();
+                const color = colorMap[connLower] || '#6b7280'; // Default gray if not mapped
+                
                 legendData.push(connName); // Only add connection name once to legend
                 
-                // Download series - solid line
+                // Download series - SOLID line
                 combinedSeries.push({
                     name: connName,
                     type: 'line',
@@ -1525,26 +1533,26 @@
                     symbolSize: 6,
                     data: connectionData[conn].download,
                     itemStyle: {
-                        color: colorMap[conn]?.download || '#6b7280'
+                        color: color
                     },
                     lineStyle: {
                         width: 3,
                         type: 'solid',
-                        color: colorMap[conn]?.download || '#6b7280'
+                        color: color
                     },
                     emphasis: {
                         focus: 'series',
                         itemStyle: {
-                            color: colorMap[conn]?.download || '#6b7280'
+                            color: color
                         },
                         lineStyle: {
-                            color: colorMap[conn]?.download || '#6b7280',
+                            color: color,
                             width: 4
                         }
                     }
                 });
                 
-                // Upload series - dashed line with different color
+                // Upload series - DASHED line (same color, different style)
                 combinedSeries.push({
                     name: connName,
                     type: 'line',
@@ -1553,20 +1561,20 @@
                     symbolSize: 6,
                     data: connectionData[conn].upload,
                     itemStyle: {
-                        color: colorMap[conn]?.upload || '#9ca3af'
+                        color: color
                     },
                     lineStyle: {
                         width: 2.5,
                         type: 'dashed',
-                        color: colorMap[conn]?.upload || '#9ca3af'
+                        color: color
                     },
                     emphasis: {
                         focus: 'series',
                         itemStyle: {
-                            color: colorMap[conn]?.upload || '#9ca3af'
+                            color: color
                         },
                         lineStyle: {
-                            color: colorMap[conn]?.upload || '#9ca3af',
+                            color: color,
                             width: 3.5
                         }
                     }
