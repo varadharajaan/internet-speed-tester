@@ -1512,31 +1512,31 @@
             function getColorForConnection(connectionType) {
                 const conn = connectionType.trim();
                 
-                // Exact match for each connection type
+                // Exact match for each connection type with vibrant colors
                 if (conn === 'Wi-Fi 2.4GHz') {
-                    return '#eab308'; // Yellow for 2.4GHz
+                    return '#f59e0b'; // Amber/Orange for 2.4GHz
                 }
                 if (conn === 'Wi-Fi 5GHz') {
-                    return '#22c55e'; // Green for 5GHz
+                    return '#10b981'; // Emerald Green for 5GHz
                 }
                 if (conn === 'Ethernet') {
-                    return '#3b82f6'; // Blue for Ethernet
+                    return '#06b6d4'; // Cyan for Ethernet
                 }
                 if (conn === 'Mobile' || conn === 'Cellular') {
-                    return '#a855f7'; // Purple for Mobile
+                    return '#8b5cf6'; // Violet for Mobile
                 }
                 if (conn === 'Unknown') {
-                    return '#ef4444'; // Red for Unknown
+                    return '#f43f5e'; // Rose/Pink for Unknown
                 }
                 
                 // Fallback for any other variations
                 const connLower = conn.toLowerCase();
-                if (connLower.includes('2.4')) return '#eab308';
-                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#22c55e';
-                if (connLower.includes('ethernet')) return '#3b82f6';
-                if (connLower.includes('mobile') || connLower.includes('cellular')) return '#a855f7';
+                if (connLower.includes('2.4')) return '#f59e0b'; // Amber
+                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#10b981'; // Emerald
+                if (connLower.includes('ethernet')) return '#06b6d4'; // Cyan
+                if (connLower.includes('mobile') || connLower.includes('cellular')) return '#8b5cf6'; // Violet
                 
-                return '#ef4444'; // Default red
+                return '#f43f5e'; // Rose/Pink
             }
 
             // Create combined series for both download and upload
