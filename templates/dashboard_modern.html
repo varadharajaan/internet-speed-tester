@@ -1483,48 +1483,61 @@
 
         // Initialize Connection Type Comparison Chart (Combined Download & Upload)
         function initConnectionTypeCharts() {
-            // Group data by connection type
+            // Group data by INDIVIDUAL connection types (split comma-separated values)
             const connectionData = {};
             
             chartData.timestamps.forEach((timestamp, index) => {
-                const connection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
-                if (!connectionData[connection]) {
-                    connectionData[connection] = {
-                        download: [],
-                        upload: [],
-                        timestamps: []
-                    };
-                }
-                connectionData[connection].download.push(chartData.download[index]);
-                connectionData[connection].upload.push(chartData.upload[index]);
-                connectionData[connection].timestamps.push(timestamp);
+                const rawConnection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
+                
+                // Split comma-separated connection types and process each individually
+                const connections = rawConnection.split(',').map(c => c.trim());
+                
+                connections.forEach(connection => {
+                    if (!connectionData[connection]) {
+                        connectionData[connection] = {
+                            download: [],
+                            upload: [],
+                            timestamps: []
+                        };
+                    }
+                    connectionData[connection].download.push(chartData.download[index]);
+                    connectionData[connection].upload.push(chartData.upload[index]);
+                    connectionData[connection].timestamps.push(timestamp);
+                });
             });
 
             // Debug: Log connection types found
             console.log('Connection types found:', Object.keys(connectionData));
 
-            // Function to get color based on connection type
+            // Function to get color based on EXACT connection type
             function getColorForConnection(connectionType) {
-                const conn = connectionType.toLowerCase().trim();
+                const conn = connectionType.trim();
                 
-                // WiFi 2.4GHz variants
-                if (conn.includes('2.4') || conn.includes('2.4ghz')) {
-                    return '#f59e0b'; // Amber/Orange
+                // Exact match for each connection type
+                if (conn === 'Wi-Fi 2.4GHz') {
+                    return '#eab308'; // Yellow for 2.4GHz
                 }
-                // WiFi 5GHz variants
-                if (conn.includes('5ghz') || conn.includes('5 ghz')) {
-                    return '#10b981'; // Emerald Green
+                if (conn === 'Wi-Fi 5GHz') {
+                    return '#22c55e'; // Green for 5GHz
                 }
-                // Ethernet
-                if (conn.includes('ethernet')) {
-                    return '#3b82f6'; // Bright Blue
+                if (conn === 'Ethernet') {
+                    return '#3b82f6'; // Blue for Ethernet
                 }
-                // Mobile
-                if (conn.includes('mobile') || conn.includes('cellular')) {
-                    return '#8b5cf6'; // Purple
+                if (conn === 'Mobile' || conn === 'Cellular') {
+                    return '#a855f7'; // Purple for Mobile
                 }
-                // Unknown or default
-                return '#ef4444'; // Red
+                if (conn === 'Unknown') {
+                    return '#ef4444'; // Red for Unknown
+                }
+                
+                // Fallback for any other variations
+                const connLower = conn.toLowerCase();
+                if (connLower.includes('2.4')) return '#eab308';
+                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#22c55e';
+                if (connLower.includes('ethernet')) return '#3b82f6';
+                if (connLower.includes('mobile') || connLower.includes('cellular')) return '#a855f7';
+                
+                return '#ef4444'; // Default red
             }
 
             // Create combined series for both download and upload
