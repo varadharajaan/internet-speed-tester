@@ -1529,10 +1529,19 @@
                     },
                     lineStyle: {
                         width: 3,
-                        type: 'solid'
+                        type: 'solid',
+                        color: colorMap[conn]?.download || '#6b7280'
                     },
-                    // Add custom label to show this is download in tooltip
-                    encode: { tooltip: [1] }
+                    emphasis: {
+                        focus: 'series',
+                        itemStyle: {
+                            color: colorMap[conn]?.download || '#6b7280'
+                        },
+                        lineStyle: {
+                            color: colorMap[conn]?.download || '#6b7280',
+                            width: 4
+                        }
+                    }
                 });
                 
                 // Upload series - dashed line with different color
@@ -1548,7 +1557,18 @@
                     },
                     lineStyle: {
                         width: 2.5,
-                        type: 'dashed'
+                        type: 'dashed',
+                        color: colorMap[conn]?.upload || '#9ca3af'
+                    },
+                    emphasis: {
+                        focus: 'series',
+                        itemStyle: {
+                            color: colorMap[conn]?.upload || '#9ca3af'
+                        },
+                        lineStyle: {
+                            color: colorMap[conn]?.upload || '#9ca3af',
+                            width: 3.5
+                        }
                     }
                 });
             });
@@ -1601,7 +1621,17 @@
                     data: legendData,
                     top: 10,
                     textStyle: { color: '#4b5563', fontSize: 12, fontWeight: 600 },
-                    itemGap: 20
+                    itemGap: 20,
+                    // Enable selection for toggling visibility
+                    selected: (() => {
+                        const selected = {};
+                        legendData.forEach(name => selected[name] = true);
+                        return selected;
+                    })(),
+                    // Custom formatter to show visual indicators
+                    formatter: function(name) {
+                        return name;
+                    }
                 },
                 grid: {
                     left: '3%',
