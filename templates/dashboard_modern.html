@@ -1483,27 +1483,26 @@
 
         // Initialize Connection Type Comparison Chart (Combined Download & Upload)
         function initConnectionTypeCharts() {
-            // Group data by INDIVIDUAL connection types (split comma-separated values)
+            // Group data by connection type - use PRIMARY (first) connection only
             const connectionData = {};
             
             chartData.timestamps.forEach((timestamp, index) => {
                 const rawConnection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
                 
-                // Split comma-separated connection types and process each individually
-                const connections = rawConnection.split(',').map(c => c.trim());
+                // If comma-separated (mixed connection during test), take ONLY the first one
+                // This represents the primary connection type for that measurement
+                const connection = rawConnection.split(',')[0].trim();
                 
-                connections.forEach(connection => {
-                    if (!connectionData[connection]) {
-                        connectionData[connection] = {
-                            download: [],
-                            upload: [],
-                            timestamps: []
-                        };
-                    }
-                    connectionData[connection].download.push(chartData.download[index]);
-                    connectionData[connection].upload.push(chartData.upload[index]);
-                    connectionData[connection].timestamps.push(timestamp);
-                });
+                if (!connectionData[connection]) {
+                    connectionData[connection] = {
+                        download: [],
+                        upload: [],
+                        timestamps: []
+                    };
+                }
+                connectionData[connection].download.push(chartData.download[index]);
+                connectionData[connection].upload.push(chartData.upload[index]);
+                connectionData[connection].timestamps.push(timestamp);
             });
 
             // Debug: Log connection types found
