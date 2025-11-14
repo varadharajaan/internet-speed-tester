@@ -1,6 +1,12 @@
 {
   "expected_speed_mbps": 200,
   "tolerance_percent": 10,
+  "connection_type_thresholds": {
+    "Wi-Fi 5GHz": 200,
+    "Wi-Fi 2.4GHz": 100,
+    "Ethernet": 200,
+    "Unknown": 150
+  },
   "s3_bucket": "vd-speed-test",
   "s3_bucket_hourly": "vd-speed-test-hourly-prod",
   "s3_bucket_weekly": "vd-speed-test-weekly-prod",

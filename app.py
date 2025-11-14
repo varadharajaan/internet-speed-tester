@@ -673,6 +673,14 @@ def dashboard():
     if not df.empty and "date_ist" in df.columns:
         df = df.sort_values("date_ist", ascending=False)
     
+    # Get connection type thresholds from config
+    connection_type_thresholds = config.get("connection_type_thresholds", {
+        "Wi-Fi 5GHz": 200,
+        "Wi-Fi 2.4GHz": 100,
+        "Ethernet": 200,
+        "Unknown": 150
+    })
+    
     return render_template(
         "dashboard_modern.html",
         data=df.to_dict(orient="records"),
@@ -703,6 +711,7 @@ def dashboard():
         threshold=threshold,
         default_threshold=DEFAULT_THRESHOLD,
         tolerance_percent=TOLERANCE_PERCENT,
+        connection_type_thresholds=connection_type_thresholds,
         mode=mode
     )
 

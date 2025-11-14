@@ -1552,6 +1552,9 @@
             // Define the order for connection types
             const connectionOrder = ['Wi-Fi 2.4GHz', 'Wi-Fi 5GHz', 'Ethernet', 'Unknown'];
             
+            // Get thresholds from backend config
+            const connectionThresholds = {{ connection_type_thresholds|tojson }};
+            
             // Sort connection types according to defined order
             const sortedConnections = Object.keys(connectionData).sort((a, b) => {
                 let indexA = connectionOrder.indexOf(a);
@@ -1567,12 +1570,13 @@
             sortedConnections.forEach(conn => {
                 const connName = conn.charAt(0).toUpperCase() + conn.slice(1);
                 const color = getColorForConnection(conn);
+                const threshold = connectionThresholds[conn];
                 
-                console.log(`Connection: "${conn}" => Color: ${color}`); // Debug log
+                console.log(`Connection: "${conn}" => Color: ${color}, Threshold: ${threshold}`); // Debug log
                 
                 legendData.push(connName); // Only add connection name once to legend
                 
-                // Download series - SOLID line
+                // Download series - SOLID line with threshold markLine
                 combinedSeries.push({
                     name: connName,
                     type: 'line',
@@ -1597,7 +1601,30 @@
                             color: color,
                             width: 4
                         }
-                    }
+                    },
+                    markLine: threshold ? {
+                        silent: true,
+                        symbol: 'none',
+                        lineStyle: {
+                            color: color,
+                            type: 'dashed',
+                            width: 2,
+                            opacity: 0.7
+                        },
+                        label: {
+                            formatter: `${threshold} Mbps`,
+                            position: 'insideEndTop',
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            padding: 2,
+                            borderRadius: 3
+                        },
+                        data: [{
+                            yAxis: threshold
+                        }]
+                    } : undefined
                 });
                 
                 // Upload series - DASHED line (same color, different style)
