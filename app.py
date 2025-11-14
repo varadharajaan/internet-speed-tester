@@ -497,6 +497,73 @@ def dashboard():
 
     log.info(f"Dashboard summary ready for mode={mode}, days={period}")
     
+    # Calculate percentile statistics (industry standard)
+    percentiles = {}
+    if not df.empty:
+        percentiles = {
+            "download_p50": round(df["download_avg"].quantile(0.50), 2),
+            "download_p95": round(df["download_avg"].quantile(0.95), 2),
+            "download_p99": round(df["download_avg"].quantile(0.99), 2),
+            "upload_p50": round(df["upload_avg"].quantile(0.50), 2),
+            "upload_p95": round(df["upload_avg"].quantile(0.95), 2),
+            "upload_p99": round(df["upload_avg"].quantile(0.99), 2),
+            "ping_p50": round(df["ping_avg"].quantile(0.50), 2),
+            "ping_p95": round(df["ping_avg"].quantile(0.95), 2),
+            "ping_p99": round(df["ping_avg"].quantile(0.99), 2),
+        }
+    
+    # Calculate trend indicators (compare with previous period)
+    trends = {}
+    if not df.empty and len(df) > 1:
+        # Split data in half to compare current vs previous period
+        mid_point = len(df) // 2
+        df_sorted = df.sort_values("date_ist")
+        current_period = df_sorted.iloc[mid_point:]
+        previous_period = df_sorted.iloc[:mid_point]
+        
+        if not current_period.empty and not previous_period.empty:
+            curr_down = current_period["download_avg"].mean()
+            prev_down = previous_period["download_avg"].mean()
+            curr_up = current_period["upload_avg"].mean()
+            prev_up = previous_period["upload_avg"].mean()
+            curr_ping = current_period["ping_avg"].mean()
+            prev_ping = previous_period["ping_avg"].mean()
+            
+            trends = {
+                "download_change": round(((curr_down - prev_down) / prev_down * 100) if prev_down > 0 else 0, 1),
+                "upload_change": round(((curr_up - prev_up) / prev_up * 100) if prev_up > 0 else 0, 1),
+                "ping_change": round(((curr_ping - prev_ping) / prev_ping * 100) if prev_ping > 0 else 0, 1),
+                "tests_change": round(((len(current_period) - len(previous_period)) / len(previous_period) * 100) if len(previous_period) > 0 else 0, 1)
+            }
+    
+    # Calculate historical best/worst records
+    historical_records = {}
+    if not df.empty:
+        best_download_idx = df["download_avg"].idxmax()
+        worst_download_idx = df["download_avg"].idxmin()
+        best_upload_idx = df["upload_avg"].idxmax()
+        lowest_ping_idx = df["ping_avg"].idxmin()
+        
+        historical_records = {
+            "best_download": {
+                "value": round(df.loc[best_download_idx, "download_avg"], 2),
+                "date": str(df.loc[best_download_idx, "date_ist"]),
+                "server": df.loc[best_download_idx, "top_server"] if "top_server" in df.columns else "N/A"
+            },
+            "worst_download": {
+                "value": round(df.loc[worst_download_idx, "download_avg"], 2),
+                "date": str(df.loc[worst_download_idx, "date_ist"])
+            },
+            "best_upload": {
+                "value": round(df.loc[best_upload_idx, "upload_avg"], 2),
+                "date": str(df.loc[best_upload_idx, "date_ist"])
+            },
+            "lowest_ping": {
+                "value": round(df.loc[lowest_ping_idx, "ping_avg"], 2),
+                "date": str(df.loc[lowest_ping_idx, "date_ist"])
+            }
+        }
+    
     # Calculate connection type statistics
     connection_stats = {}
     connection_thresholds = {
@@ -611,6 +678,9 @@ def dashboard():
         days=period,
         summary=summary,
         stats=stats,
+        percentiles=percentiles,
+        trends=trends,
+        historical_records=historical_records,
         connection_stats=connection_stats,
         chart_data=chart_data,
         quick_filters=quick_filters,

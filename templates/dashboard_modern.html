@@ -183,10 +183,28 @@
             <!-- Download Speed Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Download</p>
                         <p class="text-3xl font-bold text-indigo-600">{{ "%.2f"|format(stats.avg_download or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                        {% if trends and trends.download_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.download_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.download_change }}%</span>
+                            {% elif trends.download_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.download_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-indigo-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,10 +217,28 @@
             <!-- Upload Speed Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Upload</p>
                         <p class="text-3xl font-bold text-purple-600">{{ "%.2f"|format(stats.avg_upload or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                        {% if trends and trends.upload_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.upload_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.upload_change }}%</span>
+                            {% elif trends.upload_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.upload_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-purple-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,10 +251,28 @@
             <!-- Ping Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Ping <span class="text-xs text-gray-400">(lower is better)</span></p>
                         <p class="text-3xl font-bold text-green-600">{{ "%.2f"|format(stats.avg_ping or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">ms</p>
+                        {% if trends and trends.ping_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.ping_change < 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">{{ trends.ping_change }}% Better</span>
+                            {% elif trends.ping_change > 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">+{{ trends.ping_change }}% Worse</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-green-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,10 +285,28 @@
             <!-- Total Tests Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Total Tests</p>
                         <p class="text-3xl font-bold text-blue-600">{{ stats.total_tests or 0 }}</p>
                         <p class="text-xs text-gray-500 mt-1">completed</p>
+                        {% if trends and trends.tests_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.tests_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.tests_change }}%</span>
+                            {% elif trends.tests_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.tests_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-blue-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,6 +448,156 @@
                 {% endif %}
             </div>
         </div>
+
+        <!-- Percentile Statistics (Industry Standard) -->
+        {% if percentiles %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                📈 Percentile Statistics <span class="text-sm font-normal text-gray-500 ml-2">(Industry Standard Metrics)</span>
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Download Percentiles -->
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                        </svg>
+                        Download Speed
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p50 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p95 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p99 }} Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Percentiles -->
+                <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload Speed
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p50 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p95 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p99 }} Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ping Percentiles -->
+                <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-5 border border-green-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Ping Latency
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p50 }} ms</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p95 }} ms</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p99 }} ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-4 text-center">💡 P50 = 50% of tests were faster | P95 = 95% faster | P99 = 99% faster</p>
+        </div>
+        {% endif %}
+
+        <!-- Historical Best/Worst Records -->
+        {% if historical_records %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+                🏆 Historical Records <span class="text-sm font-normal text-gray-500 ml-2">(All-Time Best Performance)</span>
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Best Download -->
+                <div class="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-4 border-2 border-yellow-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Fastest Download</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-yellow-700 mb-1">{{ historical_records.best_download.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.best_download.date[:10] }}</p>
+                    {% if historical_records.best_download.server %}
+                    <p class="text-xs text-gray-500 mt-1 truncate" title="{{ historical_records.best_download.server }}">{{ historical_records.best_download.server[:30] }}...</p>
+                    {% endif %}
+                </div>
+
+                <!-- Worst Download -->
+                <div class="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-4 border-2 border-red-200 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Slowest Download</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-red-700 mb-1">{{ historical_records.worst_download.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.worst_download.date[:10] }}</p>
+                </div>
+
+                <!-- Best Upload -->
+                <div class="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Fastest Upload</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-blue-700 mb-1">{{ historical_records.best_upload.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.best_upload.date[:10] }}</p>
+                </div>
+
+                <!-- Lowest Ping -->
+                <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Lowest Ping</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-green-700 mb-1">{{ historical_records.lowest_ping.value }} ms</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.lowest_ping.date[:10] }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Filters Panel -->
         <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
