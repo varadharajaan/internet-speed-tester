@@ -183,10 +183,28 @@
             <!-- Download Speed Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Download</p>
                         <p class="text-3xl font-bold text-indigo-600">{{ "%.2f"|format(stats.avg_download or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                        {% if trends and trends.download_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.download_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.download_change }}%</span>
+                            {% elif trends.download_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.download_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-indigo-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,10 +217,28 @@
             <!-- Upload Speed Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Upload</p>
                         <p class="text-3xl font-bold text-purple-600">{{ "%.2f"|format(stats.avg_upload or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                        {% if trends and trends.upload_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.upload_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.upload_change }}%</span>
+                            {% elif trends.upload_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.upload_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-purple-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,10 +251,28 @@
             <!-- Ping Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Ping <span class="text-xs text-gray-400">(lower is better)</span></p>
                         <p class="text-3xl font-bold text-green-600">{{ "%.2f"|format(stats.avg_ping or 0) }}</p>
                         <p class="text-xs text-gray-500 mt-1">ms</p>
+                        {% if trends and trends.ping_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.ping_change < 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">{{ trends.ping_change }}% Better</span>
+                            {% elif trends.ping_change > 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">+{{ trends.ping_change }}% Worse</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-green-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,10 +285,28 @@
             <!-- Total Tests Card -->
             <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Total Tests</p>
                         <p class="text-3xl font-bold text-blue-600">{{ stats.total_tests or 0 }}</p>
                         <p class="text-xs text-gray-500 mt-1">completed</p>
+                        {% if trends and trends.tests_change is defined %}
+                        <div class="mt-2 flex items-center">
+                            {% if trends.tests_change > 0 %}
+                            <svg class="w-4 h-4 text-green-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-green-600">+{{ trends.tests_change }}%</span>
+                            {% elif trends.tests_change < 0 %}
+                            <svg class="w-4 h-4 text-red-500 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                            </svg>
+                            <span class="text-xs font-semibold text-red-600">{{ trends.tests_change }}%</span>
+                            {% else %}
+                            <span class="text-xs font-semibold text-gray-500">No change</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400 ml-1">vs prev period</span>
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="bg-blue-100 rounded-full p-3">
                         <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -377,6 +449,167 @@
             </div>
         </div>
 
+        <!-- Percentile Statistics (Industry Standard) -->
+        {% if percentiles %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                📈 Percentile Statistics <span class="text-sm font-normal text-gray-500 ml-2">(Industry Standard Metrics)</span>
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Download Percentiles -->
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                        </svg>
+                        Download Speed
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p50 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p95 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-indigo-700">{{ percentiles.download_p99 }} Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Percentiles -->
+                <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload Speed
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p50 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p95 }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-purple-700">{{ percentiles.upload_p99 }} Mbps</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ping Percentiles -->
+                <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-xl p-5 border border-green-200">
+                    <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        Ping Latency
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P50 (Median):</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p50 }} ms</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P95:</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p95 }} ms</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">P99:</span>
+                            <span class="font-bold text-green-700">{{ percentiles.ping_p99 }} ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                <p class="text-sm text-gray-700 text-center">
+                    <strong>📊 Quick Guide:</strong> 
+                    <span class="font-semibold text-blue-700">P50</span> = Typical speed (half are faster, half slower) | 
+                    <span class="font-semibold text-indigo-700">P95</span> = 95% of tests were this fast or faster than this value | 
+                    <span class="font-semibold text-purple-700">P99</span> = Peak performance (99% achieved this or better than this value)
+                </p>
+                <p class="text-xs text-gray-600 text-center mt-2">
+                    💡 <strong>For Download/Upload:</strong> Higher percentiles = Better performance | 
+                    <strong>For Ping:</strong> Lower percentiles = Better latency (lower ping is better!)
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Historical Best/Worst Records -->
+        {% if historical_records %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+                🏆 Historical Records <span class="text-sm font-normal text-gray-500 ml-2">(All-Time Best Performance)</span>
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Best Download -->
+                <div class="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-xl p-4 border-2 border-yellow-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Fastest Download</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-yellow-700 mb-1">{{ historical_records.best_download.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.best_download.date[:10] }}</p>
+                    {% if historical_records.best_download.server %}
+                    <p class="text-xs text-gray-500 mt-1 truncate" title="{{ historical_records.best_download.server }}">{{ historical_records.best_download.server[:30] }}...</p>
+                    {% endif %}
+                </div>
+
+                <!-- Worst Download -->
+                <div class="bg-gradient-to-br from-red-50 to-orange-50 rounded-xl p-4 border-2 border-red-200 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Slowest Download</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-red-700 mb-1">{{ historical_records.worst_download.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.worst_download.date[:10] }}</p>
+                </div>
+
+                <!-- Best Upload -->
+                <div class="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Fastest Upload</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-blue-700 mb-1">{{ historical_records.best_upload.value }} Mbps</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.best_upload.date[:10] }}</p>
+                </div>
+
+                <!-- Lowest Ping -->
+                <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-300 smooth-transition hover:shadow-lg">
+                    <div class="flex items-center mb-2">
+                        <svg class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <h4 class="font-semibold text-gray-700">Lowest Ping</h4>
+                    </div>
+                    <p class="text-2xl font-bold text-green-700 mb-1">{{ historical_records.lowest_ping.value }} ms</p>
+                    <p class="text-xs text-gray-600">{{ historical_records.lowest_ping.date[:10] }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Filters Panel -->
         <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
             <div class="flex items-center justify-between mb-6">
@@ -438,6 +671,11 @@
                         <span class="ml-1 px-2 py-0.5 bg-purple-100 rounded-full text-xs">{{ conn.count }}</span>
                     </button>
                     {% endfor %}
+                    
+                    <!-- Clear Quick Filters Button -->
+                    <button type="button" onclick="clearQuickFilters()" class="quick-filter-btn px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        🔄 Clear Filters
+                    </button>
                 </div>
             </div>
             {% endif %}
@@ -500,72 +738,83 @@
                             </label>
                         </div>
                     </div>
+                    
+                    <!-- Primary Controls Apply Button -->
+                    <div class="mt-4">
+                        <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 smooth-transition shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Apply
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Advanced Filters (Collapsible) -->
-                <details class="mb-6" open>
-                    <summary class="cursor-pointer bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 mb-4 border border-gray-200 hover:shadow-md smooth-transition">
-                        <span class="text-sm font-bold text-gray-700 flex items-center">
-                            <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <details class="mb-6">
+                    <summary class="cursor-pointer glass rounded-2xl p-4 mb-4 hover:shadow-lg smooth-transition border border-blue-100">
+                        <span class="text-sm font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                             </svg>
-                            🔍 Advanced Filters (Date, Time, Speed Range)
+                            <span class="text-gray-700">🔍 Advanced Filters</span>
+                            <span class="text-xs font-normal text-gray-500 ml-2">(Date, Time, Speed Range)</span>
                         </span>
                     </summary>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white rounded-xl p-5 border border-gray-200">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 glass rounded-2xl p-6 mt-2 border border-blue-100">
                         <!-- Date From -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date From</label>
-                            <input type="date" name="date_from" id="dateFrom" value="{{ date_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">📅 Date From</label>
+                            <input type="date" name="date_from" id="dateFrom" value="{{ date_from }}" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Date To -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date To</label>
-                            <input type="date" name="date_to" id="dateTo" value="{{ date_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">📅 Date To</label>
+                            <input type="date" name="date_to" id="dateTo" value="{{ date_to }}" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Time From -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time From</label>
-                            <input type="time" name="time_from" id="timeFrom" value="{{ time_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">🕐 Time From</label>
+                            <input type="time" name="time_from" id="timeFrom" value="{{ time_from }}" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Time To -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time To</label>
-                            <input type="time" name="time_to" id="timeTo" value="{{ time_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">🕐 Time To</label>
+                            <input type="time" name="time_to" id="timeTo" value="{{ time_to }}" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Min Download -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Download (Mbps)</label>
-                            <input type="number" name="min_download" id="minDownload" value="{{ min_download }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">⬇️ Min Download</label>
+                            <input type="number" name="min_download" id="minDownload" value="{{ min_download }}" step="0.1" placeholder="0" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Max Download -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Download (Mbps)</label>
-                            <input type="number" name="max_download" id="maxDownload" value="{{ max_download }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">⬇️ Max Download</label>
+                            <input type="number" name="max_download" id="maxDownload" value="{{ max_download }}" step="0.1" placeholder="1000" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Min Upload -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Upload (Mbps)</label>
-                            <input type="number" name="min_upload" id="minUpload" value="{{ min_upload }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">⬆️ Min Upload</label>
+                            <input type="number" name="min_upload" id="minUpload" value="{{ min_upload }}" step="0.1" placeholder="0" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Max Upload -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Upload (Mbps)</label>
-                            <input type="number" name="max_upload" id="maxUpload" value="{{ max_upload }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">⬆️ Max Upload</label>
+                            <input type="number" name="max_upload" id="maxUpload" value="{{ max_upload }}" step="0.1" placeholder="1000" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Connection Type -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Connection Type</label>
-                            <select name="connection_type" id="connectionType" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">📡 Connection</label>
+                            <select name="connection_type" id="connectionType" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                                 <option value="">All Types</option>
                                 <option value="wifi" {% if connection_type == 'wifi' %}selected{% endif %}>WiFi</option>
                                 <option value="ethernet" {% if connection_type == 'ethernet' %}selected{% endif %}>Ethernet</option>
@@ -575,26 +824,29 @@
 
                         <!-- ISP -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">ISP</label>
-                            <input type="text" name="isp" id="ispFilter" value="{{ isp }}" placeholder="All ISPs" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">🌐 ISP</label>
+                            <input type="text" name="isp" id="ispFilter" value="{{ isp }}" placeholder="All ISPs" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Min Ping -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Ping (ms)</label>
-                            <input type="number" name="min_ping" id="minPing" value="{{ min_ping }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">📶 Min Ping (ms)</label>
+                            <input type="number" name="min_ping" id="minPing" value="{{ min_ping }}" step="0.1" placeholder="0" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                         <!-- Max Ping -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Ping (ms)</label>
-                            <input type="number" name="max_ping" id="maxPing" value="{{ max_ping }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">📶 Max Ping (ms)</label>
+                            <input type="number" name="max_ping" id="maxPing" value="{{ max_ping }}" step="0.1" placeholder="1000" class="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400 bg-white shadow-sm">
                         </div>
 
                     <!-- Apply Button -->
-                    <div class="flex items-end">
-                        <button type="submit" class="w-full px-6 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-cyan-600 smooth-transition shadow-md hover:shadow-lg">
-                            Apply Filters
+                    <div class="flex items-end col-span-2 md:col-span-3 lg:col-span-4">
+                        <button type="submit" class="w-full px-8 py-3.5 bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold rounded-xl hover:from-blue-700 hover:to-cyan-600 smooth-transition shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                            </svg>
+                            Apply Advanced Filters
                         </button>
                     </div>
                 </div>
@@ -624,6 +876,17 @@
                 </h3>
                 <div id="pingChart" class="chart-container"></div>
             </div>
+        </div>
+
+        <!-- Connection Type Comparison Chart -->
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                📡 Performance by Connection Type <span class="text-sm font-normal text-gray-500 ml-2">(Download & Upload Comparison)</span>
+            </h3>
+            <div id="connectionTypeChart" style="height: 450px;"></div>
         </div>
 
         <!-- Data Table -->
@@ -806,8 +1069,11 @@
     <footer class="glass-dark mt-12 py-6">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
             <p class="text-sm">
-                Speed Test Dashboard &copy; 2025 | 
-                <a href="https://github.com/varadharajaan/internet-speed-tester" target="_blank" class="hover:text-indigo-300 smooth-transition">
+                Speed Test Dashboard &copy; 2025 | Developed by <strong>Varadharajan</strong> | 
+                <a href="https://github.com/varadharajaan/internet-speed-tester" target="_blank" class="hover:text-indigo-300 smooth-transition font-semibold">
+                    <svg class="w-4 h-4 inline-block mr-1" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
                     View on GitHub
                 </a>
             </p>
@@ -944,12 +1210,29 @@
                             silent: true,
                             lineStyle: {
                                 color: '#6366f1',
-                                type: 'dashed'
+                                type: 'dashed',
+                                width: 2
                             },
-                            data: [{
-                                type: 'average',
-                                name: 'Average'
-                            }]
+                            data: [
+                                {
+                                    type: 'average',
+                                    name: 'Average'
+                                },
+                                {
+                                    yAxis: 200,
+                                    name: 'Target (200 Mbps)',
+                                    lineStyle: {
+                                        color: '#10b981',
+                                        type: 'solid',
+                                        width: 2
+                                    },
+                                    label: {
+                                        show: true,
+                                        position: 'end',
+                                        formatter: '200 Mbps Target'
+                                    }
+                                }
+                            ]
                         }
                     },
                     {
@@ -1141,7 +1424,8 @@
                             silent: true,
                             lineStyle: {
                                 color: '#10b981',
-                                type: 'dashed'
+                                type: 'dashed',
+                                width: 2
                             },
                             data: [
                                 {
@@ -1149,29 +1433,34 @@
                                     name: 'Average'
                                 },
                                 {
+                                    yAxis: 20,
+                                    name: 'Excellent (<20ms)',
+                                    lineStyle: {
+                                        color: '#10b981',
+                                        type: 'dotted',
+                                        width: 2
+                                    },
+                                    label: {
+                                        show: true,
+                                        position: 'insideEndTop',
+                                        formatter: 'Excellent: <20ms'
+                                    }
+                                },
+                                {
                                     yAxis: 50,
-                                    name: 'Good',
+                                    name: 'Good (<50ms)',
                                     lineStyle: {
                                         color: '#fbbf24',
-                                        type: 'dotted'
+                                        type: 'dotted',
+                                        width: 2
+                                    },
+                                    label: {
+                                        show: true,
+                                        position: 'insideEndTop',
+                                        formatter: 'Good: <50ms'
                                     }
                                 }
                             ]
-                        },
-                        markArea: {
-                            silent: true,
-                            itemStyle: {
-                                color: 'rgba(16, 185, 129, 0.1)'
-                            },
-                            data: [[
-                                {
-                                    yAxis: 0
-                                },
-                                {
-                                    yAxis: 30,
-                                    name: 'Excellent'
-                                }
-                            ]]
                         }
                     }
                 ],
@@ -1202,10 +1491,301 @@
             window.addEventListener('resize', () => pingChart.resize());
         }
 
+        // Initialize Connection Type Comparison Chart (Combined Download & Upload)
+        function initConnectionTypeCharts() {
+            // Group data by connection type - use PRIMARY (first) connection only
+            const connectionData = {};
+            
+            chartData.timestamps.forEach((timestamp, index) => {
+                const rawConnection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
+                
+                // If comma-separated (mixed connection during test), take ONLY the first one
+                // This represents the primary connection type for that measurement
+                const connection = rawConnection.split(',')[0].trim();
+                
+                if (!connectionData[connection]) {
+                    connectionData[connection] = {
+                        download: [],
+                        upload: [],
+                        timestamps: []
+                    };
+                }
+                connectionData[connection].download.push(chartData.download[index]);
+                connectionData[connection].upload.push(chartData.upload[index]);
+                connectionData[connection].timestamps.push(timestamp);
+            });
+
+            // Debug: Log connection types found
+            console.log('Connection types found:', Object.keys(connectionData));
+
+            // Function to get color based on EXACT connection type
+            function getColorForConnection(connectionType) {
+                const conn = connectionType.trim();
+                
+                // Exact match for each connection type with custom colors
+                if (conn === 'Wi-Fi 2.4GHz') {
+                    return '#e26036'; // Orange-Red for 2.4GHz
+                }
+                if (conn === 'Wi-Fi 5GHz') {
+                    return '#38686f'; // Teal for 5GHz
+                }
+                if (conn === 'Ethernet') {
+                    return '#462749'; // Dark Purple for Ethernet
+                }
+                if (conn === 'Unknown') {
+                    return '#b23a48'; // Crimson Red for Unknown
+                }
+                
+                // Fallback for any other variations
+                const connLower = conn.toLowerCase();
+                if (connLower.includes('2.4')) return '#e26036';
+                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#38686f';
+                if (connLower.includes('ethernet')) return '#462749';
+                
+                return '#b23a48'; // Crimson Red
+            }
+
+            // Create combined series for both download and upload
+            const combinedSeries = [];
+            const legendData = [];
+            
+            // Define the order for connection types
+            const connectionOrder = ['Wi-Fi 2.4GHz', 'Wi-Fi 5GHz', 'Ethernet', 'Unknown'];
+            
+            // Get thresholds from backend config
+            const connectionThresholds = {{ connection_type_thresholds|tojson }};
+            
+            // Sort connection types according to defined order
+            const sortedConnections = Object.keys(connectionData).sort((a, b) => {
+                let indexA = connectionOrder.indexOf(a);
+                let indexB = connectionOrder.indexOf(b);
+                
+                // If not in predefined order, put at end
+                if (indexA === -1) indexA = 999;
+                if (indexB === -1) indexB = 999;
+                
+                return indexA - indexB;
+            });
+            
+            sortedConnections.forEach(conn => {
+                const connName = conn.charAt(0).toUpperCase() + conn.slice(1);
+                const color = getColorForConnection(conn);
+                const threshold = connectionThresholds[conn];
+                
+                console.log(`Connection: "${conn}" => Color: ${color}, Threshold: ${threshold}`); // Debug log
+                
+                legendData.push(connName); // Only add connection name once to legend
+                
+                // Download series - SOLID line with threshold markLine
+                combinedSeries.push({
+                    name: connName,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'circle',
+                    symbolSize: 6,
+                    data: connectionData[conn].download,
+                    itemStyle: {
+                        color: color
+                    },
+                    lineStyle: {
+                        width: 3,
+                        type: 'solid',
+                        color: color
+                    },
+                    emphasis: {
+                        focus: 'series',
+                        itemStyle: {
+                            color: color
+                        },
+                        lineStyle: {
+                            color: color,
+                            width: 4
+                        }
+                    },
+                    markLine: threshold ? {
+                        silent: true,
+                        symbol: 'none',
+                        lineStyle: {
+                            color: color,
+                            type: 'dashed',
+                            width: 2,
+                            opacity: 0.7
+                        },
+                        label: {
+                            formatter: `${threshold} Mbps`,
+                            position: 'insideEndTop',
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: 'bold',
+                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                            padding: 2,
+                            borderRadius: 3
+                        },
+                        data: [{
+                            yAxis: threshold
+                        }]
+                    } : undefined
+                });
+                
+                // Upload series - DASHED line (same color, different style)
+                combinedSeries.push({
+                    name: connName,
+                    type: 'line',
+                    smooth: true,
+                    symbol: 'triangle',
+                    symbolSize: 6,
+                    data: connectionData[conn].upload,
+                    itemStyle: {
+                        color: color
+                    },
+                    lineStyle: {
+                        width: 2.5,
+                        type: 'dashed',
+                        color: color
+                    },
+                    emphasis: {
+                        focus: 'series',
+                        itemStyle: {
+                            color: color
+                        },
+                        lineStyle: {
+                            color: color,
+                            width: 3.5
+                        }
+                    }
+                });
+            });
+
+            // Initialize combined chart
+            const connectionChart = echarts.init(document.getElementById('connectionTypeChart'));
+            
+            connectionChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: { color: '#1f2937' },
+                    formatter: function(params) {
+                        let result = '<strong>' + params[0].axisValue + '</strong><br/>';
+                        
+                        // Group by connection type
+                        const grouped = {};
+                        params.forEach(param => {
+                            if (!grouped[param.seriesName]) {
+                                grouped[param.seriesName] = { download: null, upload: null };
+                            }
+                            // Solid line = download, dashed = upload
+                            if (param.seriesIndex % 2 === 0) {
+                                grouped[param.seriesName].download = param.value;
+                            } else {
+                                grouped[param.seriesName].upload = param.value;
+                            }
+                        });
+                        
+                        // Format output
+                        Object.keys(grouped).forEach(connName => {
+                            result += '<div style="margin: 4px 0;">';
+                            result += '<strong>' + connName + ':</strong><br/>';
+                            if (grouped[connName].download !== null) {
+                                result += '&nbsp;&nbsp;⬇️ Download: <b>' + grouped[connName].download.toFixed(2) + ' Mbps</b><br/>';
+                            }
+                            if (grouped[connName].upload !== null) {
+                                result += '&nbsp;&nbsp;⬆️ Upload: <b>' + grouped[connName].upload.toFixed(2) + ' Mbps</b>';
+                            }
+                            result += '</div>';
+                        });
+                        
+                        return result;
+                    }
+                },
+                legend: {
+                    data: legendData,
+                    top: 10,
+                    textStyle: { color: '#4b5563', fontSize: 12, fontWeight: 600 },
+                    itemGap: 20,
+                    // Enable selection for toggling visibility
+                    selected: (() => {
+                        const selected = {};
+                        legendData.forEach(name => selected[name] = true);
+                        return selected;
+                    })(),
+                    // Custom formatter to show visual indicators
+                    formatter: function(name) {
+                        return name;
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '8%',
+                    top: '15%',
+                    containLabel: true
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none'
+                        },
+                        restore: {},
+                        saveAsImage: {
+                            name: 'connection_type_comparison',
+                            pixelRatio: 2
+                        }
+                    },
+                    iconStyle: {
+                        borderColor: '#667eea'
+                    },
+                    top: 10,
+                    right: 20
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData.timestamps,
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 10 }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Speed (Mbps)',
+                    nameTextStyle: { color: '#6b7280', fontSize: 12 },
+                    axisLine: { lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280' },
+                    splitLine: { lineStyle: { color: '#f3f4f6' } }
+                },
+                series: combinedSeries,
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        start: 0,
+                        end: 100,
+                        handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: '#667eea'
+                        },
+                        textStyle: {
+                            color: '#6b7280'
+                        }
+                    }
+                ]
+            });
+
+            // Responsive resize
+            window.addEventListener('resize', () => connectionChart.resize());
+        }
+
         // Initialize charts on page load
         document.addEventListener('DOMContentLoaded', function() {
             initSpeedChart();
             initPingChart();
+            initConnectionTypeCharts();
             updatePeriodLabel(); // Initialize period label
             
             // Add event listener for view mode changes
@@ -1242,49 +1822,83 @@
             window.location.href = '/dashboard';
         }
 
-        // Quick Filter Function
+        // Quick Filter Function (Client-side only - No server reload!)
         function applyQuickFilter(filterType, value) {
-            const form = document.getElementById('filterForm');
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
             
-            switch(filterType) {
-                case 'below_threshold':
-                    // Set max download to threshold value
-                    document.getElementById('maxDownload').value = {{ threshold }};
-                    break;
-                    
-                case 'performance_drops':
-                    // Set max download to 100
-                    document.getElementById('maxDownload').value = 100;
-                    break;
-                    
-                case 'high_ping':
-                    // Set min ping to 20
-                    document.getElementById('minPing').value = 20;
-                    break;
-                    
-                case 'isp':
-                    // Set ISP filter
-                    document.getElementById('ispFilter').value = value;
-                    break;
-                    
-                case 'connection':
-                    // Set connection type
-                    const connSelect = document.getElementById('connectionType');
-                    if (connSelect) {
-                        // Try to find matching option
-                        for (let option of connSelect.options) {
-                            if (option.value.toLowerCase() === value.toLowerCase() || 
-                                option.text.toLowerCase().includes(value.toLowerCase())) {
-                                option.selected = true;
-                                break;
-                            }
+            // Reset all rows to visible first
+            rows.forEach(row => row.style.display = '');
+            
+            // Apply filter based on type
+            rows.forEach(row => {
+                const cells = row.cells;
+                let shouldHide = false;
+                
+                switch(filterType) {
+                    case 'below_threshold':
+                        // Column 1 is download speed
+                        const downloadText = cells[1]?.textContent.trim();
+                        const download = parseFloat(downloadText);
+                        if (download >= {{ threshold }}) {
+                            shouldHide = true;
                         }
-                    }
-                    break;
-            }
+                        break;
+                        
+                    case 'performance_drops':
+                        // Show only rows with download < 100
+                        const downloadDropText = cells[1]?.textContent.trim();
+                        const downloadDrop = parseFloat(downloadDropText);
+                        if (downloadDrop >= 100) {
+                            shouldHide = true;
+                        }
+                        break;
+                        
+                    case 'high_ping':
+                        // Show only rows with ping > 20
+                        const pingText = cells[3]?.textContent.trim();
+                        const ping = parseFloat(pingText);
+                        if (ping <= 20) {
+                            shouldHide = true;
+                        }
+                        break;
+                        
+                    case 'isp':
+                        // Filter by ISP (not implemented in table, would need backend)
+                        // For now, show message
+                        console.log('ISP filter:', value);
+                        // Fall through to use server-side filter
+                        document.getElementById('ispFilter').value = value;
+                        document.getElementById('filterForm').submit();
+                        return;
+                        
+                    case 'connection':
+                        // Column 6 is connection type
+                        const connText = cells[6]?.textContent.toLowerCase();
+                        if (!connText.includes(value.toLowerCase())) {
+                            shouldHide = true;
+                        }
+                        break;
+                }
+                
+                if (shouldHide) {
+                    row.style.display = 'none';
+                }
+            });
             
-            // Submit the form
-            form.submit();
+            // Scroll to table
+            table.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Clear Quick Filters (Show all rows)
+        function clearQuickFilters() {
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Show all rows
+            rows.forEach(row => row.style.display = '');
         }
 
         // Table Sorting
