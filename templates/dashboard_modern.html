@@ -1512,38 +1512,49 @@
             function getColorForConnection(connectionType) {
                 const conn = connectionType.trim();
                 
-                // Exact match for each connection type with vibrant colors
+                // Exact match for each connection type with custom colors
                 if (conn === 'Wi-Fi 2.4GHz') {
-                    return '#f59e0b'; // Amber/Orange for 2.4GHz
+                    return '#ff9f1c'; // Orange for 2.4GHz
                 }
                 if (conn === 'Wi-Fi 5GHz') {
-                    return '#10b981'; // Emerald Green for 5GHz
+                    return '#0ee38a'; // Bright Green for 5GHz
                 }
                 if (conn === 'Ethernet') {
-                    return '#06b6d4'; // Cyan for Ethernet
-                }
-                if (conn === 'Mobile' || conn === 'Cellular') {
-                    return '#8b5cf6'; // Violet for Mobile
+                    return '#462749'; // Dark Purple for Ethernet
                 }
                 if (conn === 'Unknown') {
-                    return '#f43f5e'; // Rose/Pink for Unknown
+                    return '#540b0e'; // Dark Red for Unknown
                 }
                 
                 // Fallback for any other variations
                 const connLower = conn.toLowerCase();
-                if (connLower.includes('2.4')) return '#f59e0b'; // Amber
-                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#10b981'; // Emerald
-                if (connLower.includes('ethernet')) return '#06b6d4'; // Cyan
-                if (connLower.includes('mobile') || connLower.includes('cellular')) return '#8b5cf6'; // Violet
+                if (connLower.includes('2.4')) return '#ff9f1c';
+                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#0ee38a';
+                if (connLower.includes('ethernet')) return '#462749';
                 
-                return '#f43f5e'; // Rose/Pink
+                return '#540b0e'; // Dark Red
             }
 
             // Create combined series for both download and upload
             const combinedSeries = [];
             const legendData = [];
             
-            Object.keys(connectionData).forEach(conn => {
+            // Define the order for connection types
+            const connectionOrder = ['Wi-Fi 2.4GHz', 'Wi-Fi 5GHz', 'Ethernet', 'Unknown'];
+            
+            // Sort connection types according to defined order
+            const sortedConnections = Object.keys(connectionData).sort((a, b) => {
+                let indexA = connectionOrder.indexOf(a);
+                let indexB = connectionOrder.indexOf(b);
+                
+                // If not in predefined order, put at end
+                if (indexA === -1) indexA = 999;
+                if (indexB === -1) indexB = 999;
+                
+                return indexA - indexB;
+            });
+            
+            sortedConnections.forEach(conn => {
                 const connName = conn.charAt(0).toUpperCase() + conn.slice(1);
                 const color = getColorForConnection(conn);
                 
