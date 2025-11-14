@@ -531,7 +531,7 @@
                     </div>
                 </div>
             </div>
-            <p class="text-xs text-gray-500 mt-4 text-center">💡 P50 = 50% of tests were faster | P95 = 95% faster | P99 = 99% faster</p>
+            <p class="text-xs text-gray-500 mt-4 text-center">💡 <strong>Download/Upload:</strong> P50 = 50% were faster | P95 = 95% faster | P99 = 99% faster<br><strong>Ping:</strong> P50 = 50% had lower latency | P95 = 95% lower | P99 = 99% lower (lower is better)</p>
         </div>
         {% endif %}
 
@@ -660,6 +660,11 @@
                         <span class="ml-1 px-2 py-0.5 bg-purple-100 rounded-full text-xs">{{ conn.count }}</span>
                     </button>
                     {% endfor %}
+                    
+                    <!-- Clear Quick Filters Button -->
+                    <button type="button" onclick="clearQuickFilters()" class="quick-filter-btn px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        🔄 Clear Filters
+                    </button>
                 </div>
             </div>
             {% endif %}
@@ -725,69 +730,69 @@
                 </div>
 
                 <!-- Advanced Filters (Collapsible) -->
-                <details class="mb-6" open>
-                    <summary class="cursor-pointer bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 mb-4 border border-gray-200 hover:shadow-md smooth-transition">
-                        <span class="text-sm font-bold text-gray-700 flex items-center">
-                            <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <details class="mb-6">
+                    <summary class="cursor-pointer bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 mb-3 border border-gray-200 hover:shadow-md smooth-transition">
+                        <span class="text-xs font-bold text-gray-700 flex items-center">
+                            <svg class="w-3.5 h-3.5 mr-1.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                             </svg>
                             🔍 Advanced Filters (Date, Time, Speed Range)
                         </span>
                     </summary>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white rounded-xl p-5 border border-gray-200">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-white rounded-lg p-4 border border-gray-200">
                         <!-- Date From -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date From</label>
-                            <input type="date" name="date_from" id="dateFrom" value="{{ date_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Date From</label>
+                            <input type="date" name="date_from" id="dateFrom" value="{{ date_from }}" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Date To -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date To</label>
-                            <input type="date" name="date_to" id="dateTo" value="{{ date_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Date To</label>
+                            <input type="date" name="date_to" id="dateTo" value="{{ date_to }}" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Time From -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time From</label>
-                            <input type="time" name="time_from" id="timeFrom" value="{{ time_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Time From</label>
+                            <input type="time" name="time_from" id="timeFrom" value="{{ time_from }}" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Time To -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time To</label>
-                            <input type="time" name="time_to" id="timeTo" value="{{ time_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Time To</label>
+                            <input type="time" name="time_to" id="timeTo" value="{{ time_to }}" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Min Download -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Download (Mbps)</label>
-                            <input type="number" name="min_download" id="minDownload" value="{{ min_download }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Min Download</label>
+                            <input type="number" name="min_download" id="minDownload" value="{{ min_download }}" step="0.1" placeholder="0" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Max Download -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Download (Mbps)</label>
-                            <input type="number" name="max_download" id="maxDownload" value="{{ max_download }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Max Download</label>
+                            <input type="number" name="max_download" id="maxDownload" value="{{ max_download }}" step="0.1" placeholder="1000" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Min Upload -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Upload (Mbps)</label>
-                            <input type="number" name="min_upload" id="minUpload" value="{{ min_upload }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Min Upload</label>
+                            <input type="number" name="min_upload" id="minUpload" value="{{ min_upload }}" step="0.1" placeholder="0" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Max Upload -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Upload (Mbps)</label>
-                            <input type="number" name="max_upload" id="maxUpload" value="{{ max_upload }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Max Upload</label>
+                            <input type="number" name="max_upload" id="maxUpload" value="{{ max_upload }}" step="0.1" placeholder="1000" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Connection Type -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Connection Type</label>
-                            <select name="connection_type" id="connectionType" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Connection</label>
+                            <select name="connection_type" id="connectionType" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                                 <option value="">All Types</option>
                                 <option value="wifi" {% if connection_type == 'wifi' %}selected{% endif %}>WiFi</option>
                                 <option value="ethernet" {% if connection_type == 'ethernet' %}selected{% endif %}>Ethernet</option>
@@ -797,20 +802,20 @@
 
                         <!-- ISP -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">ISP</label>
-                            <input type="text" name="isp" id="ispFilter" value="{{ isp }}" placeholder="All ISPs" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">ISP</label>
+                            <input type="text" name="isp" id="ispFilter" value="{{ isp }}" placeholder="All ISPs" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Min Ping -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Ping (ms)</label>
-                            <input type="number" name="min_ping" id="minPing" value="{{ min_ping }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Min Ping (ms)</label>
+                            <input type="number" name="min_ping" id="minPing" value="{{ min_ping }}" step="0.1" placeholder="0" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                         <!-- Max Ping -->
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Ping (ms)</label>
-                            <input type="number" name="max_ping" id="maxPing" value="{{ max_ping }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Max Ping (ms)</label>
+                            <input type="number" name="max_ping" id="maxPing" value="{{ max_ping }}" step="0.1" placeholder="1000" class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md smooth-transition focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                         </div>
 
                     <!-- Apply Button -->
@@ -1464,49 +1469,83 @@
             window.location.href = '/dashboard';
         }
 
-        // Quick Filter Function
+        // Quick Filter Function (Client-side only - No server reload!)
         function applyQuickFilter(filterType, value) {
-            const form = document.getElementById('filterForm');
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
             
-            switch(filterType) {
-                case 'below_threshold':
-                    // Set max download to threshold value
-                    document.getElementById('maxDownload').value = {{ threshold }};
-                    break;
-                    
-                case 'performance_drops':
-                    // Set max download to 100
-                    document.getElementById('maxDownload').value = 100;
-                    break;
-                    
-                case 'high_ping':
-                    // Set min ping to 20
-                    document.getElementById('minPing').value = 20;
-                    break;
-                    
-                case 'isp':
-                    // Set ISP filter
-                    document.getElementById('ispFilter').value = value;
-                    break;
-                    
-                case 'connection':
-                    // Set connection type
-                    const connSelect = document.getElementById('connectionType');
-                    if (connSelect) {
-                        // Try to find matching option
-                        for (let option of connSelect.options) {
-                            if (option.value.toLowerCase() === value.toLowerCase() || 
-                                option.text.toLowerCase().includes(value.toLowerCase())) {
-                                option.selected = true;
-                                break;
-                            }
+            // Reset all rows to visible first
+            rows.forEach(row => row.style.display = '');
+            
+            // Apply filter based on type
+            rows.forEach(row => {
+                const cells = row.cells;
+                let shouldHide = false;
+                
+                switch(filterType) {
+                    case 'below_threshold':
+                        // Column 1 is download speed
+                        const downloadText = cells[1]?.textContent.trim();
+                        const download = parseFloat(downloadText);
+                        if (download >= {{ threshold }}) {
+                            shouldHide = true;
                         }
-                    }
-                    break;
-            }
+                        break;
+                        
+                    case 'performance_drops':
+                        // Show only rows with download < 100
+                        const downloadDropText = cells[1]?.textContent.trim();
+                        const downloadDrop = parseFloat(downloadDropText);
+                        if (downloadDrop >= 100) {
+                            shouldHide = true;
+                        }
+                        break;
+                        
+                    case 'high_ping':
+                        // Show only rows with ping > 20
+                        const pingText = cells[3]?.textContent.trim();
+                        const ping = parseFloat(pingText);
+                        if (ping <= 20) {
+                            shouldHide = true;
+                        }
+                        break;
+                        
+                    case 'isp':
+                        // Filter by ISP (not implemented in table, would need backend)
+                        // For now, show message
+                        console.log('ISP filter:', value);
+                        // Fall through to use server-side filter
+                        document.getElementById('ispFilter').value = value;
+                        document.getElementById('filterForm').submit();
+                        return;
+                        
+                    case 'connection':
+                        // Column 6 is connection type
+                        const connText = cells[6]?.textContent.toLowerCase();
+                        if (!connText.includes(value.toLowerCase())) {
+                            shouldHide = true;
+                        }
+                        break;
+                }
+                
+                if (shouldHide) {
+                    row.style.display = 'none';
+                }
+            });
             
-            // Submit the form
-            form.submit();
+            // Scroll to table
+            table.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Clear Quick Filters (Show all rows)
+        function clearQuickFilters() {
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Show all rows
+            rows.forEach(row => row.style.display = '');
         }
 
         // Table Sorting
