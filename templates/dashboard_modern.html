@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Test Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <style>
+        /* Custom Tailwind Configuration */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        /* Gradient Background */
+        body {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
+            min-height: 100vh;
+        }
+        
+        /* Glass-morphism Effect */
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .glass-dark {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+        }
+        
+        /* Smooth Transitions */
+        .smooth-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Hover Lift Effect */
+        .hover-lift:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        /* Pulse Animation */
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        
+        .pulse-subtle {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        /* Chart Container */
+        .chart-container {
+            height: 400px;
+            width: 100%;
+        }
+        
+        /* Badge Styles */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        /* Input Focus Styles */
+        input:focus, select:focus {
+            outline: none;
+            ring: 2px;
+            ring-color: rgba(102, 126, 234, 0.5);
+            border-color: #667eea;
+        }
+        
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        
+        .data-table thead {
+            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+            color: white;
+        }
+        
+        .data-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .data-table tbody tr {
+            transition: all 0.2s, opacity 0.3s ease;
+        }
+        
+        .data-table tbody tr:hover {
+            background-color: rgba(59, 130, 246, 0.05);
+            transform: scale(1.01);
+        }
+        
+        .data-table td {
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <!-- Navigation Bar -->
+    <nav class="glass-dark shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span class="text-white text-xl font-bold">Speed Test Dashboard</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-white text-sm">
+                        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Last Updated: <span id="lastUpdate">{{ last_update }}</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Download Speed Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 mb-1">Avg Download</p>
+                        <p class="text-3xl font-bold text-indigo-600">{{ "%.2f"|format(stats.avg_download or 0) }}</p>
+                        <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                    </div>
+                    <div class="bg-indigo-100 rounded-full p-3">
+                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Speed Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 mb-1">Avg Upload</p>
+                        <p class="text-3xl font-bold text-purple-600">{{ "%.2f"|format(stats.avg_upload or 0) }}</p>
+                        <p class="text-xs text-gray-500 mt-1">Mbps</p>
+                    </div>
+                    <div class="bg-purple-100 rounded-full p-3">
+                        <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ping Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 mb-1">Avg Ping <span class="text-xs text-gray-400">(lower is better)</span></p>
+                        <p class="text-3xl font-bold text-green-600">{{ "%.2f"|format(stats.avg_ping or 0) }}</p>
+                        <p class="text-xs text-gray-500 mt-1">ms</p>
+                    </div>
+                    <div class="bg-green-100 rounded-full p-3">
+                        <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Tests Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 mb-1">Total Tests</p>
+                        <p class="text-3xl font-bold text-blue-600">{{ stats.total_tests or 0 }}</p>
+                        <p class="text-xs text-gray-500 mt-1">completed</p>
+                    </div>
+                    <div class="bg-blue-100 rounded-full p-3">
+                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Speed Thresholds Info Banner -->
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition border-l-4 border-blue-500">
+            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                📊 Speed Thresholds by Connection (with 10.0% tolerance)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <span class="font-semibold text-gray-700">Ethernet:</span>
+                    <span class="text-blue-600">≥180 Mbps</span>
+                    <span class="text-xs text-gray-500">(200 ±10%)</span>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <span class="font-semibold text-gray-700">Wi-Fi 5GHz:</span>
+                    <span class="text-blue-600">≥180 Mbps</span>
+                    <span class="text-xs text-gray-500">(200 ±10%)</span>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <span class="font-semibold text-gray-700">Wi-Fi 2.4GHz:</span>
+                    <span class="text-blue-600">≥90 Mbps</span>
+                    <span class="text-xs text-gray-500">(100 ±10%)</span>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <span class="font-semibold text-gray-700">Unknown:</span>
+                    <span class="text-blue-600">≥135 Mbps</span>
+                    <span class="text-xs text-gray-500">(150 ±10%)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Type Statistics -->
+        {% if connection_stats %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                📈 Stats by Connection Type
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for conn_type, stats_data in connection_stats.items() %}
+                <div class="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border border-gray-200 hover:shadow-lg smooth-transition">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-lg font-bold text-gray-800">{{ conn_type }}</h4>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                            {{ stats_data.count }} tests
+                        </span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Average Speed:</span>
+                            <span class="font-bold text-lg {% if stats_data.avg >= stats_data.min_threshold %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ stats_data.avg }} Mbps
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Minimum Threshold:</span>
+                            <span class="font-semibold text-gray-700">≥{{ stats_data.min_threshold }} Mbps</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Below Minimum:</span>
+                            <span class="font-semibold {% if stats_data.below_pct > 50 %}text-red-600{% elif stats_data.below_pct > 25 %}text-yellow-600{% else %}text-green-600{% endif %}">
+                                {{ stats_data.below_min }} ({{ stats_data.below_pct }}%)
+                            </span>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="mt-3">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="{% if stats_data.below_pct > 50 %}bg-red-500{% elif stats_data.below_pct > 25 %}bg-yellow-500{% else %}bg-green-500{% endif %} h-2 rounded-full smooth-transition" 
+                                     style="width: {{ 100 - stats_data.below_pct }}%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 text-center">
+                                {{ 100 - stats_data.below_pct|round(1) }}% meeting threshold
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Additional Insights -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Days Below Expected Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    Performance Alert
+                </h3>
+                <div class="text-center py-4">
+                    <p class="text-4xl font-bold {% if summary.below_expected > summary.total_days / 2 %}text-red-600{% else %}text-green-600{% endif %} mb-2">
+                        {{ summary.below_expected }} / {{ summary.total_days }}
+                    </p>
+                    <p class="text-sm text-gray-600">Days Below Expected Speed</p>
+                    <p class="text-xs text-gray-500 mt-2">Threshold: {{ threshold }} Mbps</p>
+                </div>
+            </div>
+
+            <!-- Top Server Card -->
+            <div class="glass rounded-2xl p-6 smooth-transition">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                    </svg>
+                    Most Used Server
+                </h3>
+                <div class="bg-gradient-to-br from-teal-50 to-blue-50 rounded-lg p-4">
+                    <p class="text-sm font-semibold text-gray-700 break-words">
+                        {{ summary.top_server_over_period }}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-2">Format: Name – Host – City (Country)</p>
+                </div>
+                {% if summary.public_ips %}
+                <div class="mt-4">
+                    <p class="text-sm font-semibold text-gray-700 mb-2">Public IP(s) Observed:</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for ip in summary.public_ips %}
+                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-mono">
+                            {{ ip }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Filters Panel -->
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                    <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filters
+                </h2>
+                <button onclick="resetFilters()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 smooth-transition shadow-md hover:shadow-lg">
+                    Reset Filters
+                </button>
+            </div>
+
+            <!-- Quick Filters -->
+            {% if quick_filters %}
+            <div class="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-5 mb-6 border-2 border-cyan-200">
+                <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    ⚡ Quick Filters (Click to Apply)
+                </h3>
+                <div class="flex flex-wrap gap-2">
+                    <!-- Performance Quick Filters -->
+                    {% if quick_filters.below_threshold > 0 %}
+                    <button type="button" onclick="applyQuickFilter('below_threshold')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        🔻 Below {{ threshold }}Mbps
+                        <span class="ml-1 px-2 py-0.5 bg-orange-100 rounded-full text-xs">{{ quick_filters.below_threshold }}</span>
+                    </button>
+                    {% endif %}
+                    
+                    {% if quick_filters.performance_drops > 0 %}
+                    <button type="button" onclick="applyQuickFilter('performance_drops')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        ⚠️ Drops <100 Mbps
+                        <span class="ml-1 px-2 py-0.5 bg-red-100 rounded-full text-xs">{{ quick_filters.performance_drops }}</span>
+                    </button>
+                    {% endif %}
+                    
+                    {% if quick_filters.high_ping > 0 %}
+                    <button type="button" onclick="applyQuickFilter('high_ping')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-yellow-300 text-yellow-700 rounded-lg hover:bg-yellow-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        📶 High Ping >20ms
+                        <span class="ml-1 px-2 py-0.5 bg-yellow-100 rounded-full text-xs">{{ quick_filters.high_ping }}</span>
+                    </button>
+                    {% endif %}
+                    
+                    <!-- ISP Quick Filters -->
+                    {% for isp in quick_filters.isps %}
+                    <button type="button" onclick="applyQuickFilter('isp', '{{ isp.name }}')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        🌐 {{ isp.name }}
+                        <span class="ml-1 px-2 py-0.5 bg-blue-100 rounded-full text-xs">{{ isp.count }}</span>
+                    </button>
+                    {% endfor %}
+                    
+                    <!-- Connection Type Quick Filters -->
+                    {% for conn in quick_filters.connection_types %}
+                    <button type="button" onclick="applyQuickFilter('connection', '{{ conn.name }}')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
+                        📡 {{ conn.name }}
+                        <span class="ml-1 px-2 py-0.5 bg-purple-100 rounded-full text-xs">{{ conn.count }}</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="/dashboard" id="filterForm">
+                <!-- Primary Controls Row -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 mb-6 border-2 border-blue-200">
+                    <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        ⚙️ Primary Controls
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- View Mode -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
+                            <select name="mode" id="viewMode" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
+                                <option value="minute" {% if view_mode == 'minute' %}selected{% endif %}>15-min</option>
+                                <option value="hourly" {% if view_mode == 'hourly' %}selected{% endif %}>Hourly</option>
+                                <option value="daily" {% if view_mode == 'daily' %}selected{% endif %}>Daily</option>
+                                <option value="weekly" {% if view_mode == 'weekly' %}selected{% endif %}>Weekly</option>
+                                <option value="monthly" {% if view_mode == 'monthly' %}selected{% endif %}>Monthly</option>
+                                <option value="yearly" {% if view_mode == 'yearly' %}selected{% endif %}>Yearly</option>
+                            </select>
+                        </div>
+
+                        <!-- Period (Days) -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Period (Days)</label>
+                            <select name="days" id="periodDays" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
+                                <option value="1" {% if days == 1 %}selected{% endif %}>Last 1 day</option>
+                                <option value="3" {% if days == 3 %}selected{% endif %}>Last 3 days</option>
+                                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
+                                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+                                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                                <option value="180" {% if days == 180 %}selected{% endif %}>Last 180 days</option>
+                                <option value="365" {% if days == 365 %}selected{% endif %}>Last 365 days</option>
+                            </select>
+                        </div>
+
+                        <!-- Threshold -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Threshold (Mbps)</label>
+                            <input type="number" name="threshold" id="threshold" value="{{ threshold }}" step="0.1" placeholder="200.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Show URLs Checkbox -->
+                        <div class="flex items-end">
+                            <label class="flex items-center space-x-3 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-blue-50 smooth-transition w-full">
+                                <input type="checkbox" name="urls" id="showUrls" value="yes" {% if show_urls %}checked{% endif %} class="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
+                                <span class="text-sm font-semibold text-gray-700 flex items-center">
+                                    <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                    </svg>
+                                    Show URLs
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Filters (Collapsible) -->
+                <details class="mb-6" open>
+                    <summary class="cursor-pointer bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 mb-4 border border-gray-200 hover:shadow-md smooth-transition">
+                        <span class="text-sm font-bold text-gray-700 flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                            </svg>
+                            🔍 Advanced Filters (Date, Time, Speed Range)
+                        </span>
+                    </summary>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white rounded-xl p-5 border border-gray-200">
+                        <!-- Date From -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date From</label>
+                            <input type="date" name="date_from" id="dateFrom" value="{{ date_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Date To -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Date To</label>
+                            <input type="date" name="date_to" id="dateTo" value="{{ date_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Time From -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time From</label>
+                            <input type="time" name="time_from" id="timeFrom" value="{{ time_from }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Time To -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Time To</label>
+                            <input type="time" name="time_to" id="timeTo" value="{{ time_to }}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Min Download -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Download (Mbps)</label>
+                            <input type="number" name="min_download" id="minDownload" value="{{ min_download }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Max Download -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Download (Mbps)</label>
+                            <input type="number" name="max_download" id="maxDownload" value="{{ max_download }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Min Upload -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Upload (Mbps)</label>
+                            <input type="number" name="min_upload" id="minUpload" value="{{ min_upload }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Max Upload -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Upload (Mbps)</label>
+                            <input type="number" name="max_upload" id="maxUpload" value="{{ max_upload }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Connection Type -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Connection Type</label>
+                            <select name="connection_type" id="connectionType" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">All Types</option>
+                                <option value="wifi" {% if connection_type == 'wifi' %}selected{% endif %}>WiFi</option>
+                                <option value="ethernet" {% if connection_type == 'ethernet' %}selected{% endif %}>Ethernet</option>
+                                <option value="mobile" {% if connection_type == 'mobile' %}selected{% endif %}>Mobile</option>
+                            </select>
+                        </div>
+
+                        <!-- ISP -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">ISP</label>
+                            <input type="text" name="isp" id="ispFilter" value="{{ isp }}" placeholder="All ISPs" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Min Ping -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Min Ping (ms)</label>
+                            <input type="number" name="min_ping" id="minPing" value="{{ min_ping }}" step="0.1" placeholder="0.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- Max Ping -->
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Max Ping (ms)</label>
+                            <input type="number" name="max_ping" id="maxPing" value="{{ max_ping }}" step="0.1" placeholder="1000.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                    <!-- Apply Button -->
+                    <div class="flex items-end">
+                        <button type="submit" class="w-full px-6 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-cyan-600 smooth-transition shadow-md hover:shadow-lg">
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Download/Upload Chart -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+                    </svg>
+                    Download & Upload Speed
+                </h3>
+                <div id="speedChart" class="chart-container"></div>
+            </div>
+
+            <!-- Ping Chart -->
+            <div class="glass rounded-2xl p-6 smooth-transition hover-lift">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    Ping Latency
+                </h3>
+                <div id="pingChart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="glass rounded-2xl p-6 smooth-transition">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                    <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Speed Test Data
+                    <span class="ml-3 px-3 py-1 bg-indigo-100 text-indigo-800 text-sm font-semibold rounded-full pulse-subtle">
+                        {{ data|length }} records
+                    </span>
+                </h2>
+                <div class="flex items-center space-x-3">
+                    <button onclick="exportToCSV()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 smooth-transition shadow-md hover:shadow-lg flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Connection Filter -->
+            <div class="mb-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="text-sm font-semibold text-gray-700 flex items-center">
+                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                        </svg>
+                        📋 Table Connection Filter:
+                    </label>
+                    <div class="text-sm text-gray-600">
+                        <span id="visibleRows">{{ data|length }}</span> / {{ data|length }} rows visible
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="Wi-Fi 5GHz" class="connection-filter w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" onchange="filterTableByConnection()">
+                        <span class="text-sm text-gray-700">Wi-Fi 5GHz</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="Wi-Fi 2.4GHz" class="connection-filter w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" onchange="filterTableByConnection()">
+                        <span class="text-sm text-gray-700">Wi-Fi 2.4GHz</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="Ethernet" class="connection-filter w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" onchange="filterTableByConnection()">
+                        <span class="text-sm text-gray-700">Ethernet</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="Unknown" class="connection-filter w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" onchange="filterTableByConnection()">
+                        <span class="text-sm text-gray-700">Unknown</span>
+                    </label>
+                    <button onclick="clearConnectionFilters()" class="ml-4 px-3 py-1 text-xs bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 smooth-transition">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg">
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th class="cursor-pointer hover:bg-indigo-700 smooth-transition" onclick="sortTable(0)">
+                                Timestamp 
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                </svg>
+                            </th>
+                            <th class="cursor-pointer hover:bg-indigo-700 smooth-transition" onclick="sortTable(1)">
+                                Download (Mbps)
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                </svg>
+                            </th>
+                            <th class="cursor-pointer hover:bg-indigo-700 smooth-transition" onclick="sortTable(2)">
+                                Upload (Mbps)
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                </svg>
+                            </th>
+                            <th class="cursor-pointer hover:bg-indigo-700 smooth-transition" onclick="sortTable(3)">
+                                Ping (ms)
+                                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                </svg>
+                            </th>
+                            <th>Server</th>
+                            <th>Public IP</th>
+                            <th>Connection</th>
+                            {% if show_urls %}
+                            <th>Result URLs</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in data %}
+                        <tr class="smooth-transition">
+                            <td class="font-medium text-gray-900">{{ record.date_ist_str or record.date_ist }}</td>
+                            <td>
+                                <span class="badge bg-indigo-100 text-indigo-800">
+                                    {{ "%.2f"|format(record.download_avg or 0) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-purple-100 text-purple-800">
+                                    {{ "%.2f"|format(record.upload_avg or 0) }}
+                                </span>
+                            </td>
+                            <td>
+                                {% set ping_val = record.ping_avg or 0 %}
+                                {% if ping_val < 20 %}
+                                <span class="badge bg-green-100 text-green-800" title="Excellent - Low latency">
+                                    {{ "%.2f"|format(ping_val) }}
+                                </span>
+                                {% elif ping_val < 50 %}
+                                <span class="badge bg-yellow-100 text-yellow-800" title="Good - Moderate latency">
+                                    {{ "%.2f"|format(ping_val) }}
+                                </span>
+                                {% elif ping_val < 100 %}
+                                <span class="badge bg-orange-100 text-orange-800" title="Fair - Higher latency">
+                                    {{ "%.2f"|format(ping_val) }}
+                                </span>
+                                {% else %}
+                                <span class="badge bg-red-100 text-red-800" title="Poor - High latency">
+                                    {{ "%.2f"|format(ping_val) }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-gray-600">{{ record.top_server or 'N/A' }}</td>
+                            <td class="text-gray-600">{{ record.public_ip or 'N/A' }}</td>
+                            <td>
+                                {% if record.connection_type == 'wifi' or 'wifi' in (record.connection_type or '').lower() %}
+                                <span class="badge bg-blue-100 text-blue-800">
+                                    <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                                    </svg>
+                                    WiFi
+                                </span>
+                                {% elif record.connection_type == 'ethernet' or 'ethernet' in (record.connection_type or '').lower() %}
+                                <span class="badge bg-gray-100 text-gray-800">
+                                    <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                                    </svg>
+                                    Ethernet
+                                </span>
+                                {% else %}
+                                <span class="badge bg-orange-100 text-orange-800">
+                                    {{ record.connection_type or 'Unknown' }}
+                                </span>
+                                {% endif %}
+                            </td>
+                            {% if show_urls %}
+                            <td>
+                                {% if record.result_urls and record.result_urls|length > 0 %}
+                                    {% for url in record.result_urls %}
+                                    <a href="{{ url }}" target="_blank" class="inline-flex items-center text-blue-600 hover:text-blue-800 text-xs mr-2 mb-1 smooth-transition">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                        </svg>
+                                        Result #{{ loop.index }}
+                                    </a>
+                                    {% if not loop.last %}<br>{% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                <span class="text-gray-400 text-xs">No URLs</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="glass-dark mt-12 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
+            <p class="text-sm">
+                Speed Test Dashboard &copy; 2025 | 
+                <a href="https://github.com/varadharajaan/internet-speed-tester" target="_blank" class="hover:text-indigo-300 smooth-transition">
+                    View on GitHub
+                </a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Chart Data Preparation
+        const chartData = {{ chart_data|tojson }};
+        
+        // Initialize Speed Chart (Download + Upload)
+        function initSpeedChart() {
+            const speedChart = echarts.init(document.getElementById('speedChart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross',
+                        label: {
+                            backgroundColor: '#6366f1'
+                        }
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#1f2937'
+                    },
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        params.forEach(param => {
+                            result += param.marker + ' ' + param.seriesName + ': <b>' + param.value.toFixed(2) + ' Mbps</b><br/>';
+                        });
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['Download', 'Upload'],
+                    top: 10,
+                    textStyle: {
+                        color: '#4b5563',
+                        fontSize: 12,
+                        fontWeight: 600
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none'
+                        },
+                        restore: {},
+                        saveAsImage: {
+                            name: 'speed_chart',
+                            pixelRatio: 2
+                        }
+                    },
+                    iconStyle: {
+                        borderColor: '#667eea'
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData.timestamps,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#d1d5db'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#6b7280',
+                        rotate: 45,
+                        fontSize: 10
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Speed (Mbps)',
+                    nameTextStyle: {
+                        color: '#6b7280',
+                        fontSize: 12
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#d1d5db'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#6b7280'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#f3f4f6'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: 'Download',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        sampling: 'average',
+                        itemStyle: {
+                            color: '#6366f1'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                {
+                                    offset: 0,
+                                    color: 'rgba(99, 102, 241, 0.3)'
+                                },
+                                {
+                                    offset: 1,
+                                    color: 'rgba(99, 102, 241, 0.05)'
+                                }
+                            ])
+                        },
+                        lineStyle: {
+                            width: 3
+                        },
+                        data: chartData.download,
+                        markLine: {
+                            silent: true,
+                            lineStyle: {
+                                color: '#6366f1',
+                                type: 'dashed'
+                            },
+                            data: [{
+                                type: 'average',
+                                name: 'Average'
+                            }]
+                        }
+                    },
+                    {
+                        name: 'Upload',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        sampling: 'average',
+                        itemStyle: {
+                            color: '#a855f7'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                {
+                                    offset: 0,
+                                    color: 'rgba(168, 85, 247, 0.3)'
+                                },
+                                {
+                                    offset: 1,
+                                    color: 'rgba(168, 85, 247, 0.05)'
+                                }
+                            ])
+                        },
+                        lineStyle: {
+                            width: 3
+                        },
+                        data: chartData.upload,
+                        markLine: {
+                            silent: true,
+                            lineStyle: {
+                                color: '#a855f7',
+                                type: 'dashed'
+                            },
+                            data: [{
+                                type: 'average',
+                                name: 'Average'
+                            }]
+                        }
+                    }
+                ],
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        start: 0,
+                        end: 100,
+                        handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: '#667eea'
+                        },
+                        textStyle: {
+                            color: '#6b7280'
+                        }
+                    }
+                ]
+            };
+            
+            speedChart.setOption(option);
+            
+            // Responsive resize
+            window.addEventListener('resize', () => speedChart.resize());
+        }
+
+        // Initialize Ping Chart
+        function initPingChart() {
+            const pingChart = echarts.init(document.getElementById('pingChart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow',
+                        label: {
+                            backgroundColor: '#10b981'
+                        }
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderColor: '#e5e7eb',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#1f2937'
+                    },
+                    formatter: function(params) {
+                        return params[0].name + '<br/>' + 
+                               params[0].marker + ' Ping: <b>' + params[0].value.toFixed(2) + ' ms</b>';
+                    }
+                },
+                legend: {
+                    data: ['Ping'],
+                    top: 10,
+                    textStyle: {
+                        color: '#4b5563',
+                        fontSize: 12,
+                        fontWeight: 600
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none'
+                        },
+                        restore: {},
+                        saveAsImage: {
+                            name: 'ping_chart',
+                            pixelRatio: 2
+                        }
+                    },
+                    iconStyle: {
+                        borderColor: '#10b981'
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData.timestamps,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#d1d5db'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#6b7280',
+                        rotate: 45,
+                        fontSize: 10
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'Latency (ms)',
+                    nameTextStyle: {
+                        color: '#6b7280',
+                        fontSize: 12
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#d1d5db'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#6b7280'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#f3f4f6'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: 'Ping',
+                        type: 'line',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        sampling: 'average',
+                        itemStyle: {
+                            color: '#10b981'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                {
+                                    offset: 0,
+                                    color: 'rgba(16, 185, 129, 0.3)'
+                                },
+                                {
+                                    offset: 1,
+                                    color: 'rgba(16, 185, 129, 0.05)'
+                                }
+                            ])
+                        },
+                        lineStyle: {
+                            width: 3
+                        },
+                        data: chartData.ping,
+                        markLine: {
+                            silent: true,
+                            lineStyle: {
+                                color: '#10b981',
+                                type: 'dashed'
+                            },
+                            data: [
+                                {
+                                    type: 'average',
+                                    name: 'Average'
+                                },
+                                {
+                                    yAxis: 50,
+                                    name: 'Good',
+                                    lineStyle: {
+                                        color: '#fbbf24',
+                                        type: 'dotted'
+                                    }
+                                }
+                            ]
+                        },
+                        markArea: {
+                            silent: true,
+                            itemStyle: {
+                                color: 'rgba(16, 185, 129, 0.1)'
+                            },
+                            data: [[
+                                {
+                                    yAxis: 0
+                                },
+                                {
+                                    yAxis: 30,
+                                    name: 'Excellent'
+                                }
+                            ]]
+                        }
+                    }
+                ],
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        start: 0,
+                        end: 100,
+                        handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: '#10b981'
+                        },
+                        textStyle: {
+                            color: '#6b7280'
+                        }
+                    }
+                ]
+            };
+            
+            pingChart.setOption(option);
+            
+            // Responsive resize
+            window.addEventListener('resize', () => pingChart.resize());
+        }
+
+        // Initialize charts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initSpeedChart();
+            initPingChart();
+            updatePeriodLabel(); // Initialize period label
+            
+            // Add event listener for view mode changes
+            document.getElementById('viewMode').addEventListener('change', updatePeriodLabel);
+        });
+
+        // Update period label based on view mode
+        function updatePeriodLabel() {
+            const viewMode = document.getElementById('viewMode').value;
+            const periodLabel = document.querySelector('label[for="periodDays"]');
+            const periodSelect = document.getElementById('periodDays');
+            
+            const labelText = {
+                'minute': 'Period (Days)',
+                'hourly': 'Period (Days)',
+                'daily': 'Period (Days)',
+                'weekly': 'Period (Weeks)',
+                'monthly': 'Period (Months)',
+                'yearly': 'Period (Years)'
+            };
+            
+            // Update the label text
+            if (periodLabel && labelText[viewMode]) {
+                periodLabel.textContent = labelText[viewMode];
+            }
+            
+            // Optionally update dropdown options based on view mode
+            // For now, keeping the same options for all modes
+            // Could customize options per mode in future enhancement
+        }
+
+        // Reset Filters Function
+        function resetFilters() {
+            window.location.href = '/dashboard';
+        }
+
+        // Quick Filter Function
+        function applyQuickFilter(filterType, value) {
+            const form = document.getElementById('filterForm');
+            
+            switch(filterType) {
+                case 'below_threshold':
+                    // Set max download to threshold value
+                    document.getElementById('maxDownload').value = {{ threshold }};
+                    break;
+                    
+                case 'performance_drops':
+                    // Set max download to 100
+                    document.getElementById('maxDownload').value = 100;
+                    break;
+                    
+                case 'high_ping':
+                    // Set min ping to 20
+                    document.getElementById('minPing').value = 20;
+                    break;
+                    
+                case 'isp':
+                    // Set ISP filter
+                    document.getElementById('ispFilter').value = value;
+                    break;
+                    
+                case 'connection':
+                    // Set connection type
+                    const connSelect = document.getElementById('connectionType');
+                    if (connSelect) {
+                        // Try to find matching option
+                        for (let option of connSelect.options) {
+                            if (option.value.toLowerCase() === value.toLowerCase() || 
+                                option.text.toLowerCase().includes(value.toLowerCase())) {
+                                option.selected = true;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+            }
+            
+            // Submit the form
+            form.submit();
+        }
+
+        // Table Sorting
+        let sortDirection = {};
+        
+        function sortTable(columnIndex) {
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+            
+            // Initialize to descending if first click
+            if (sortDirection[columnIndex] === undefined) {
+                sortDirection[columnIndex] = false; // false = descending
+            } else {
+                sortDirection[columnIndex] = !sortDirection[columnIndex];
+            }
+            const ascending = sortDirection[columnIndex];
+            
+            // Update header icons
+            headers.forEach((header, idx) => {
+                const svg = header.querySelector('svg');
+                if (svg && idx === columnIndex) {
+                    svg.style.transform = ascending ? 'rotate(180deg)' : 'rotate(0deg)';
+                    svg.style.transition = 'transform 0.3s';
+                }
+            });
+            
+            rows.sort((a, b) => {
+                let aValue = a.cells[columnIndex].textContent.trim();
+                let bValue = b.cells[columnIndex].textContent.trim();
+                
+                // Try to parse as number
+                const aNum = parseFloat(aValue);
+                const bNum = parseFloat(bValue);
+                
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return ascending ? aNum - bNum : bNum - aNum;
+                }
+                
+                // String comparison (dates and text)
+                return ascending ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+            });
+            
+            // Rebuild table with animation
+            rows.forEach((row, index) => {
+                row.style.opacity = '0';
+                setTimeout(() => {
+                    tbody.appendChild(row);
+                    row.style.opacity = '1';
+                }, index * 10);
+            });
+        }
+
+        // Filter Table by Connection Type (Multi-select)
+        function filterTableByConnection() {
+            const checkboxes = document.querySelectorAll('.connection-filter:checked');
+            const selectedFilters = Array.from(checkboxes).map(cb => cb.value.toLowerCase());
+            const table = document.getElementById('dataTable');
+            const tbody = table.querySelector('tbody');
+            const rows = tbody.querySelectorAll('tr');
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const connectionCell = row.cells[6]; // Connection is the 7th column (index 6)
+                if (connectionCell) {
+                    const connectionText = connectionCell.textContent.trim().toLowerCase();
+                    
+                    // If no filters selected, show all rows
+                    if (selectedFilters.length === 0) {
+                        row.style.display = '';
+                        visibleCount++;
+                    } else {
+                        // Check if connection text contains ANY of the selected filter values
+                        // This handles comma-separated values like "Wi-Fi 5GHz, Wi-Fi 2.4GHz"
+                        const matchesFilter = selectedFilters.some(filter => connectionText.includes(filter));
+                        
+                        if (matchesFilter) {
+                            row.style.display = '';
+                            visibleCount++;
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    }
+                }
+            });
+            
+            // Update visible count
+            document.getElementById('visibleRows').textContent = visibleCount;
+        }
+
+        // Clear all connection filters
+        function clearConnectionFilters() {
+            const checkboxes = document.querySelectorAll('.connection-filter');
+            checkboxes.forEach(cb => cb.checked = false);
+            filterTableByConnection();
+        }
+
+        // Export to CSV (only visible rows)
+        function exportToCSV() {
+            const table = document.getElementById('dataTable');
+            const rows = Array.from(table.querySelectorAll('tr'));
+            
+            const csv = rows.filter(row => {
+                // Include header row or visible data rows
+                return row.parentElement.tagName === 'THEAD' || row.style.display !== 'none';
+            }).map(row => {
+                const cells = Array.from(row.querySelectorAll('th, td'));
+                return cells.map(cell => {
+                    const text = cell.textContent.trim();
+                    return '"' + text.replace(/"/g, '""') + '"';
+                }).join(',');
+            }).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'speed_test_data_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Auto-refresh every 5 minutes (optional)
+        // setInterval(() => {
+        //     location.reload();
+        // }, 300000);
+    </script>
+</body>
+</html>

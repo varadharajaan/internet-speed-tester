@@ -425,13 +425,17 @@ def detect_anomalies(df, threshold):
     return df
 
 # --- Routes -------------------------------------------------------------------
-@app.route("/")
+@app.route("/", methods=["GET", "POST"])
+@app.route("/dashboard", methods=["GET", "POST"])
 @log_execution
 def dashboard():
-    period = int(request.args.get("days", 7))
-    mode = request.args.get("mode", "daily")
-    show_urls = request.args.get("urls", "no").lower() == "yes"
-    threshold = request.args.get("threshold")
+    # Get parameters from either GET (query string) or POST (form data)
+    params = request.form if request.method == "POST" else request.args
+    
+    period = int(params.get("days", 7))
+    mode = params.get("mode", "daily")
+    show_urls = params.get("urls", "no").lower() == "yes"
+    threshold = params.get("threshold")
 
     try:
         threshold = float(threshold) if threshold not in (None, "") else DEFAULT_THRESHOLD
@@ -492,11 +496,138 @@ def dashboard():
             })
 
     log.info(f"Dashboard summary ready for mode={mode}, days={period}")
+    
+    # Calculate connection type statistics
+    connection_stats = {}
+    connection_thresholds = {
+        "Ethernet": {"threshold": 200, "min_threshold": 180},
+        "Wi-Fi 5GHz": {"threshold": 200, "min_threshold": 180},
+        "Wi-Fi 2.4GHz": {"threshold": 100, "min_threshold": 90},
+        "Unknown": {"threshold": 150, "min_threshold": 135}
+    }
+    
+    if not df.empty and "connection_type" in df.columns:
+        # Parse connection types from comma-separated values
+        for conn_type_key in connection_thresholds.keys():
+            # Filter rows that contain this connection type
+            mask = df["connection_type"].str.contains(conn_type_key, case=False, na=False)
+            conn_df = df[mask]
+            
+            if not conn_df.empty:
+                conn_avg = conn_df["download_avg"].mean()
+                conn_count = len(conn_df)
+                min_threshold = connection_thresholds[conn_type_key]["min_threshold"]
+                below_min = (conn_df["download_avg"] < min_threshold).sum()
+                below_pct = (below_min / conn_count * 100) if conn_count > 0 else 0
+                
+                connection_stats[conn_type_key] = {
+                    "count": conn_count,
+                    "avg": round(conn_avg, 1),
+                    "threshold": connection_thresholds[conn_type_key]["threshold"],
+                    "min_threshold": min_threshold,
+                    "below_min": below_min,
+                    "below_pct": round(below_pct, 1)
+                }
+    
+    # Prepare chart data for ECharts
+    if not df.empty and "date_ist" in df.columns:
+        try:
+            timestamps = df["date_ist"].dt.strftime("%Y-%m-%d %H:%M").tolist()
+        except:
+            timestamps = [str(x) for x in df["date_ist"].tolist()]
+    else:
+        timestamps = []
+    
+    # Extract dynamic quick filter options
+    quick_filters = {
+        "below_threshold": 0,
+        "performance_drops": 0,
+        "high_ping": 0,
+        "isps": [],
+        "connection_types": []
+    }
+    
+    if not df.empty:
+        # Count performance categories
+        quick_filters["below_threshold"] = int((df["download_avg"] < threshold).sum())
+        quick_filters["performance_drops"] = int((df["download_avg"] < 100).sum())
+        quick_filters["high_ping"] = int((df["ping_avg"] > 20).sum())
+        
+        # Extract unique ISPs
+        if "isp" in df.columns:
+            unique_isps = df["isp"].dropna().unique()
+            isp_counts = df["isp"].value_counts().to_dict()
+            quick_filters["isps"] = [
+                {"name": isp, "count": isp_counts.get(isp, 0)} 
+                for isp in sorted(unique_isps) if isp
+            ]
+        
+        # Extract unique connection types
+        if "connection_type" in df.columns:
+            # Handle comma-separated connection types
+            all_conn_types = set()
+            for conn_str in df["connection_type"].dropna():
+                if isinstance(conn_str, str):
+                    types = [t.strip() for t in conn_str.split(",")]
+                    all_conn_types.update(types)
+            
+            # Count occurrences
+            conn_counts = {}
+            for conn_type in all_conn_types:
+                count = df["connection_type"].str.contains(conn_type, case=False, na=False).sum()
+                conn_counts[conn_type] = count
+            
+            quick_filters["connection_types"] = [
+                {"name": ct, "count": conn_counts[ct]} 
+                for ct in sorted(all_conn_types) if ct
+            ]
+    
+    chart_data = {
+        "timestamps": timestamps,
+        "download": df["download_avg"].fillna(0).tolist() if not df.empty and "download_avg" in df.columns else [],
+        "upload": df["upload_avg"].fillna(0).tolist() if not df.empty and "upload_avg" in df.columns else [],
+        "ping": df["ping_avg"].fillna(0).tolist() if not df.empty and "ping_avg" in df.columns else []
+    }
+    
+    # Stats summary with total_tests
+    stats = {
+        "avg_download": summary.get("avg_download", 0),
+        "avg_upload": summary.get("avg_upload", 0),
+        "avg_ping": summary.get("avg_ping", 0),
+        "total_tests": len(df) if not df.empty else 0
+    }
+    
+    # Get current datetime for last_update
+    import datetime as dt
+    last_update = dt.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S IST")
+    
+    # Sort data by date in descending order (newest first)
+    if not df.empty and "date_ist" in df.columns:
+        df = df.sort_values("date_ist", ascending=False)
+    
     return render_template(
-        "dashboard.html",
+        "dashboard_modern.html",
         data=df.to_dict(orient="records"),
         days=period,
         summary=summary,
+        stats=stats,
+        connection_stats=connection_stats,
+        chart_data=chart_data,
+        quick_filters=quick_filters,
+        last_update=last_update,
+        view_mode=mode,
+        date_from=params.get("date_from", ""),
+        date_to=params.get("date_to", ""),
+        time_from=params.get("time_from", ""),
+        time_to=params.get("time_to", ""),
+        min_download=params.get("min_download", ""),
+        max_download=params.get("max_download", ""),
+        min_upload=params.get("min_upload", ""),
+        max_upload=params.get("max_upload", ""),
+        min_ping=params.get("min_ping", ""),
+        max_ping=params.get("max_ping", ""),
+        connection_type=params.get("connection_type", ""),
+        isp=params.get("isp", ""),
         show_urls=show_urls,
         threshold=threshold,
         default_threshold=DEFAULT_THRESHOLD,
