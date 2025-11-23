@@ -310,7 +310,7 @@ def load_weekly_data(weeks=52):
 def load_monthly_data(months=12):
     """Load monthly aggregated data from S3_BUCKET_MONTHLY, filtered by number of months."""
     paginator = s3.get_paginator("list_objects_v2")
-    results = []
+    monthly_data = {}  # Key: month_str, Value: (data, last_modified)
     cutoff_date = datetime.datetime.now(TIMEZONE).date().replace(day=1)
     cutoff_date = cutoff_date - datetime.timedelta(days=30 * months)  # Approximate months back
 
@@ -327,28 +327,38 @@ def load_monthly_data(months=12):
                 # Filter by months parameter
                 if month_date < cutoff_date:
                     continue
+                
+                # Keep only the most recent file for each month (deduplication)
+                last_modified = obj.get("LastModified")
+                if month_str not in monthly_data or (last_modified and last_modified > monthly_data[month_str][1]):
+                    monthly_data[month_str] = (data, last_modified)
                     
-                results.append({
-                    "date_ist": month_date,
-                    "date_ist_str": month_date.strftime("%Y-%m"),
-                    "download_avg": data["avg_download"],
-                    "upload_avg": data["avg_upload"],
-                    "ping_avg": data["avg_ping"],
-                    "days": data.get("days", 0),
-                    "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
-                    "top_server": "",
-                    "public_ips": [],
-                    "public_ip": "",
-                    "result_urls": []
-                })
             except Exception as e:
                 log.warning(f"Skip {key}: {e}")
+
+    # Convert deduplicated data to results list
+    results = []
+    for month_str, (data, _) in monthly_data.items():
+        month_date = datetime.datetime.strptime(month_str, "%Y%m").date()
+        results.append({
+            "date_ist": month_date,
+            "date_ist_str": month_date.strftime("%Y-%m"),
+            "download_avg": data["avg_download"],
+            "upload_avg": data["avg_upload"],
+            "ping_avg": data["avg_ping"],
+            "days": data.get("days", 0),
+            "connection_type": ", ".join(data.get("connection_types", [])) if data.get("connection_types") else "Unknown",
+            "top_server": "",
+            "public_ips": [],
+            "public_ip": "",
+            "result_urls": []
+        })
 
     if not results:
         log.warning(f"No monthly data found for last {months} months.")
         return pd.DataFrame(columns=["date_ist"])
     df = pd.DataFrame(results)
-    log.info(f"Loaded {len(df)} monthly records from S3 (last {months} months).")
+    log.info(f"Loaded {len(df)} unique monthly records from S3 (last {months} months, deduplicated).")
     return df.sort_values("date_ist")
 
 @log_execution
