@@ -413,15 +413,47 @@ def safe_float(value):
         return 0.0
     
 # --- Anomaly Detection --------------------------------------------------------
-def detect_anomalies(df, threshold):
+def detect_anomalies(df):
+    """
+    Detect anomalies in speed test data using connection-aware thresholds.
+    Uses connection-specific thresholds from config for accurate performance assessment.
+    """
     if df.empty:
         return df
+    
+    # Statistical anomalies (relative to dataset mean)
     dl_mean = df["download_avg"].mean()
     ping_mean = df["ping_avg"].mean()
     df["download_anomaly"] = df["download_avg"] < (0.7 * dl_mean)
     df["ping_anomaly"] = df["ping_avg"] > (1.5 * ping_mean)
+    
+    # Connection-aware threshold anomalies
+    connection_thresholds = config.get("connection_type_thresholds", {
+        "Wi-Fi 5GHz": 200,
+        "Wi-Fi 2.4GHz": 100,
+        "Ethernet": 200,
+        "Unknown": 150
+    })
+    
     tolerance = TOLERANCE_PERCENT / 100.0
-    df["below_expected"] = df["download_avg"] < (threshold * (1 - tolerance))
+    
+    def is_below_expected(row):
+        """Check if download speed is below expected for connection type."""
+        conn_type = str(row.get("connection_type", "Unknown"))
+        # Extract primary connection type (in case of comma-separated values)
+        primary_conn = conn_type.split(",")[0].strip() if conn_type else "Unknown"
+        
+        # Find matching threshold
+        threshold = connection_thresholds.get("Unknown", 150)  # default
+        for key, value in connection_thresholds.items():
+            if key.lower() in primary_conn.lower():
+                threshold = value
+                break
+        
+        return row["download_avg"] < (threshold * (1 - tolerance))
+    
+    df["below_expected"] = df.apply(is_below_expected, axis=1)
+    
     return df
 
 # --- Routes -------------------------------------------------------------------
@@ -429,18 +461,22 @@ def detect_anomalies(df, threshold):
 @app.route("/dashboard", methods=["GET", "POST"])
 @log_execution
 def dashboard():
-    # Get parameters from either GET (query string) or POST (form data)
-    params = request.form if request.method == "POST" else request.args
+    # Primary controls from GET parameters (mode, days)
+    mode = request.args.get("mode", "daily")
+    days_param = int(request.args.get("days", 7))
     
-    period = int(params.get("days", 7))
-    mode = params.get("mode", "daily")
-    show_urls = params.get("urls", "no").lower() == "yes"
-    threshold = params.get("threshold")
+    # Advanced filters from POST body (if any)
+    params = request.form if request.method == "POST" else request.args
 
-    try:
-        threshold = float(threshold) if threshold not in (None, "") else DEFAULT_THRESHOLD
-    except Exception:
-        threshold = DEFAULT_THRESHOLD
+    # Convert days parameter to appropriate units based on mode
+    if mode == "weekly":
+        period = days_param // 7  # Convert days to weeks
+    elif mode == "monthly":
+        period = days_param // 30  # Convert days to months (approximate)
+    elif mode == "yearly":
+        period = days_param // 365  # Convert days to years
+    else:
+        period = days_param  # Use days as-is for minute, hourly, daily modes
 
     # Load data based on mode
     if mode == "minute":
@@ -456,7 +492,7 @@ def dashboard():
     else:  # daily
         df = load_summaries()  # daily mode loads all and filters in load_summaries
     
-    df = detect_anomalies(df, threshold)
+    df = detect_anomalies(df)
 
     summary = {}
     if not df.empty:
@@ -466,8 +502,69 @@ def dashboard():
             for vals in df.get("public_ips", [])
             if isinstance(vals, list)
             for ip in vals
-            if isinstance(ip, str) and ip.strip()
+            if isinstance(ip, str) and ip.strip() and ip.strip().lower() not in ('unknown', 'n/a', '')
         })
+        
+        # Calculate CIDR ranges for public IPs
+        cidr_ranges = []
+        if public_ips:
+            try:
+                import ipaddress
+                # Group IPs by /16 network first (larger aggregation)
+                networks_16 = {}
+                networks_24 = {}
+                
+                for ip_str in public_ips:
+                    try:
+                        ip = ipaddress.ip_address(ip_str)
+                        # Get /16 network (e.g., 223.178.0.0/16)
+                        network_16 = ipaddress.ip_network(f"{ip}/16", strict=False)
+                        network_16_str = str(network_16)
+                        if network_16_str not in networks_16:
+                            networks_16[network_16_str] = []
+                        networks_16[network_16_str].append(ip_str)
+                        
+                        # Also track /24 networks for single IP cases
+                        network_24 = ipaddress.ip_network(f"{ip}/24", strict=False)
+                        network_24_str = str(network_24)
+                        if network_24_str not in networks_24:
+                            networks_24[network_24_str] = []
+                        networks_24[network_24_str].append(ip_str)
+                    except ValueError:
+                        continue
+                
+                # Use /16 if multiple /24 blocks exist in same /16, otherwise use /24
+                cidr_info = []
+                for cidr_16, ips_16 in networks_16.items():
+                    # Count how many different /24 blocks are in this /16
+                    unique_24_blocks = set()
+                    for ip_str in ips_16:
+                        ip = ipaddress.ip_address(ip_str)
+                        network_24 = ipaddress.ip_network(f"{ip}/24", strict=False)
+                        unique_24_blocks.add(str(network_24))
+                    
+                    # If 3+ different /24 blocks in same /16, show as /16
+                    if len(unique_24_blocks) >= 3:
+                        cidr_info.append({
+                            "cidr": cidr_16,
+                            "count": len(ips_16),
+                            "ips": ips_16
+                        })
+                    else:
+                        # Show individual /24 blocks
+                        for block_24 in unique_24_blocks:
+                            cidr_info.append({
+                                "cidr": block_24,
+                                "count": len(networks_24[block_24]),
+                                "ips": networks_24[block_24]
+                            })
+                
+                # Sort by IP count (descending)
+                cidr_ranges = sorted(cidr_info, key=lambda x: x['count'], reverse=True)
+                
+            except Exception as e:
+                log.warning(f"Failed to calculate CIDR ranges: {e}")
+                cidr_ranges = []
 
         if mode in ["daily", "hourly"]:
             below_count = int(df["below_expected"].sum())
@@ -477,14 +574,34 @@ def dashboard():
             below_count = int(daily_below.sum())
             total_days = int(daily_below.size)
 
+        # Load raw minute-level data once for both averages and percentiles
+        # This ensures statistics reflect actual test performance, not aggregated views
+        raw_df = None
+        try:
+            raw_df = load_minute_data(period)
+        except Exception as e:
+            log.warning(f"Failed to load raw minute data for statistics: {e}")
+        
+        # Calculate averages from raw data
+        if raw_df is not None and not raw_df.empty:
+            avg_download = round(raw_df["download_avg"].mean(), 2)
+            avg_upload = round(raw_df["upload_avg"].mean(), 2)
+            avg_ping = round(raw_df["ping_avg"].mean(), 2)
+        else:
+            # Fallback to aggregated df
+            avg_download = round(df["download_avg"].mean(), 2)
+            avg_upload = round(df["upload_avg"].mean(), 2)
+            avg_ping = round(df["ping_avg"].mean(), 2)
+
         summary = {
-            "avg_download": round(df["download_avg"].mean(), 2),
-            "avg_upload": round(df["upload_avg"].mean(), 2),
-            "avg_ping": round(df["ping_avg"].mean(), 2),
+            "avg_download": avg_download,
+            "avg_upload": avg_upload,
+            "avg_ping": avg_ping,
             "below_expected": below_count,
             "total_days": total_days,
             "top_server_over_period": top_server_over_period,
             "public_ips": public_ips,
+            "cidr_ranges": cidr_ranges,
         }
 
         if mode in ["daily", "hourly"]:
@@ -497,9 +614,22 @@ def dashboard():
 
     log.info(f"Dashboard summary ready for mode={mode}, days={period}")
     
-    # Calculate percentile statistics (industry standard)
+    # Calculate percentile statistics using the same raw_df loaded earlier
     percentiles = {}
-    if not df.empty:
+    if raw_df is not None and not raw_df.empty:
+        percentiles = {
+            "download_p50": round(raw_df["download_avg"].quantile(0.50), 2),
+            "download_p95": round(raw_df["download_avg"].quantile(0.95), 2),
+            "download_p99": round(raw_df["download_avg"].quantile(0.99), 2),
+            "upload_p50": round(raw_df["upload_avg"].quantile(0.50), 2),
+            "upload_p95": round(raw_df["upload_avg"].quantile(0.95), 2),
+            "upload_p99": round(raw_df["upload_avg"].quantile(0.99), 2),
+            "ping_p50": round(raw_df["ping_avg"].quantile(0.50), 2),
+            "ping_p95": round(raw_df["ping_avg"].quantile(0.95), 2),
+            "ping_p99": round(raw_df["ping_avg"].quantile(0.99), 2),
+        }
+    elif not df.empty:
+        # Fallback to aggregated df if raw data unavailable
         percentiles = {
             "download_p50": round(df["download_avg"].quantile(0.50), 2),
             "download_p95": round(df["download_avg"].quantile(0.95), 2),
@@ -616,7 +746,8 @@ def dashboard():
     
     if not df.empty:
         # Count performance categories
-        quick_filters["below_threshold"] = int((df["download_avg"] < threshold).sum())
+        # Below threshold uses conservative 200 Mbps (shows all potentially poor connections)
+        quick_filters["below_threshold"] = int((df["download_avg"] < 200).sum())
         quick_filters["performance_drops"] = int((df["download_avg"] < 100).sum())
         quick_filters["high_ping"] = int((df["ping_avg"] > 20).sum())
         
@@ -637,6 +768,9 @@ def dashboard():
                 if isinstance(conn_str, str):
                     types = [t.strip() for t in conn_str.split(",")]
                     all_conn_types.update(types)
+            
+            # Filter out "Wi-Fi (unknown band)"
+            all_conn_types = {ct for ct in all_conn_types if ct and ct != "Wi-Fi (unknown band)"}
             
             # Count occurrences
             conn_counts = {}
@@ -684,7 +818,7 @@ def dashboard():
     return render_template(
         "dashboard_modern.html",
         data=df.to_dict(orient="records"),
-        days=period,
+        days=days_param,
         summary=summary,
         stats=stats,
         percentiles=percentiles,
@@ -707,8 +841,6 @@ def dashboard():
         max_ping=params.get("max_ping", ""),
         connection_type=params.get("connection_type", ""),
         isp=params.get("isp", ""),
-        show_urls=show_urls,
-        threshold=threshold,
         default_threshold=DEFAULT_THRESHOLD,
         tolerance_percent=TOLERANCE_PERCENT,
         connection_type_thresholds=connection_type_thresholds,
@@ -719,8 +851,17 @@ def dashboard():
 @log_execution
 def api_data():
     mode = request.args.get("mode", "daily")
-    period = int(request.args.get("days", 7))
-    threshold = float(request.args.get("threshold", DEFAULT_THRESHOLD))
+    days_param = int(request.args.get("days", 7))
+    
+    # Convert days parameter to appropriate units based on mode
+    if mode == "weekly":
+        period = days_param // 7  # Convert days to weeks
+    elif mode == "monthly":
+        period = days_param // 30  # Convert days to months (approximate)
+    elif mode == "yearly":
+        period = days_param // 365  # Convert days to years
+    else:
+        period = days_param  # Use days as-is for minute, hourly, daily modes
     
     # Load data based on mode
     if mode == "minute":
@@ -736,7 +877,7 @@ def api_data():
     else:  # daily
         df = load_summaries()  # daily mode loads all and filters in load_summaries
     
-    df = detect_anomalies(df, threshold)
+    df = detect_anomalies(df)
     log.info(f"API returned {len(df)} records in mode={mode}")
     return jsonify(df.to_dict(orient="records"))
 

@@ -38,6 +38,12 @@ DEFAULT_CONFIG = {
     "timezone": "Asia/Kolkata",
     "expected_speed_mbps": 200,
     "tolerance_percent": 10,
+    "connection_type_thresholds": {
+        "Wi-Fi 5GHz": 200,
+        "Wi-Fi 2.4GHz": 100,
+        "Ethernet": 200,
+        "Unknown": 150
+    },
     "log_level": "INFO",
     "log_max_bytes": 10485760,
     "log_backup_count": 5
@@ -57,6 +63,26 @@ AWS_REGION1 = os.environ.get("AWS_REGION1", config.get("aws_region"))
 TIMEZONE = pytz.timezone(config.get("timezone"))
 EXPECTED_SPEED_MBPS = float(os.environ.get("EXPECTED_SPEED_MBPS", str(config.get("expected_speed_mbps"))))
 TOLERANCE_PERCENT = float(os.environ.get("TOLERANCE_PERCENT", str(config.get("tolerance_percent"))))
+
+# Load connection type thresholds from environment or config
+try:
+    conn_type_env = os.environ.get("CONNECTION_TYPE_THRESHOLDS")
+    if conn_type_env:
+        CONNECTION_TYPE_THRESHOLDS = json.loads(conn_type_env)
+    else:
+        CONNECTION_TYPE_THRESHOLDS = config.get("connection_type_thresholds", {
+            "Wi-Fi 5GHz": 200,
+            "Wi-Fi 2.4GHz": 100,
+            "Ethernet": 200,
+            "Unknown": 150
+        })
+except (json.JSONDecodeError, ValueError):
+    CONNECTION_TYPE_THRESHOLDS = {
+        "Wi-Fi 5GHz": 200,
+        "Wi-Fi 2.4GHz": 100,
+        "Ethernet": 200,
+        "Unknown": 150
+    }
 
 # Rollup buckets from config.json (with environment variable override)
 S3_BUCKET_HOURLY = os.environ.get("S3_BUCKET_HOURLY", config.get("s3_bucket_hourly"))
@@ -181,12 +207,35 @@ def stats(values):
         "p50": round(values_sorted[idx(0.50)], 2),
     }
 
-def detect_anomalies(downloads, uploads, pings):
+def detect_anomalies(downloads, uploads, pings, connection_types=None):
+    """
+    Detect anomalies in speed test data using connection-type-specific thresholds.
+    
+    Args:
+        downloads: List of download speeds
+        uploads: List of upload speeds
+        pings: List of ping latencies
+        connection_types: List of connection types (optional, for smarter thresholding)
+    
+    Returns:
+        List of anomaly descriptions
+    """
     anomalies = []
+    
     if downloads:
         avg_dl = mean(downloads)
         min_dl = min(downloads)
-        threshold_dl = EXPECTED_SPEED_MBPS * (1 - TOLERANCE_PERCENT/100)
+        
+        # Determine threshold based on connection type
+        if connection_types:
+            # Get most common connection type
+            most_common_conn = Counter(connection_types).most_common(1)[0][0] if connection_types else None
+            # Get threshold for this connection type, fallback to default
+            expected_speed = CONNECTION_TYPE_THRESHOLDS.get(most_common_conn, EXPECTED_SPEED_MBPS)
+        else:
+            expected_speed = EXPECTED_SPEED_MBPS
+        
+        threshold_dl = expected_speed * (1 - TOLERANCE_PERCENT/100)
 
         if avg_dl < threshold_dl:
             anomalies.append(f"Below threshold: avg download {avg_dl:.2f} Mbps < {threshold_dl:.2f} Mbps")
@@ -196,8 +245,12 @@ def detect_anomalies(downloads, uploads, pings):
             anomalies.append(f"Severe degradation: min download {min_dl:.2f} Mbps")
             log.warning(f"Severe degradation detected: min download {min_dl:.2f} Mbps")
 
-        if avg_dl < 100:
-            anomalies.append(f"Performance drop: avg download {avg_dl:.2f} Mbps < 100 Mbps")
+        # Connection-type-aware performance check
+        if expected_speed == 100 and avg_dl < 80:  # Wi-Fi 2.4GHz
+            anomalies.append(f"Performance drop: avg download {avg_dl:.2f} Mbps < 80 Mbps (2.4GHz threshold)")
+            log.warning(f"Performance drop detected: avg download {avg_dl:.2f} Mbps")
+        elif expected_speed >= 200 and avg_dl < 150:  # Wi-Fi 5GHz / Ethernet
+            anomalies.append(f"Performance drop: avg download {avg_dl:.2f} Mbps < 150 Mbps")
             log.warning(f"Performance drop detected: avg download {avg_dl:.2f} Mbps")
 
     if pings:
@@ -296,7 +349,7 @@ def aggregate_for_date(target_dt: datetime.datetime):
         log.warning(f"No data found for date {day}")
         return None
 
-    anomalies = detect_anomalies(downloads, uploads, pings)
+    anomalies = detect_anomalies(downloads, uploads, pings, connection_types)
 
     expected_records = 96  # 15-min intervals
     completion_rate = (count / expected_records) * 100
@@ -309,6 +362,10 @@ def aggregate_for_date(target_dt: datetime.datetime):
 
     top_servers = [s for s, _ in Counter(servers).most_common(5)]
     top_connection_types = [ct for ct, _ in Counter(connection_types).most_common(3)]
+    
+    # Get the threshold for the most common connection type
+    most_common_conn = top_connection_types[0] if top_connection_types else None
+    threshold_used = CONNECTION_TYPE_THRESHOLDS.get(most_common_conn, EXPECTED_SPEED_MBPS)
 
     summary = {
         "date_ist": target_dt.strftime("%Y-%m-%d"),
@@ -325,7 +382,8 @@ def aggregate_for_date(target_dt: datetime.datetime):
         "public_ips": sorted(list(ips)),
         "connection_types": top_connection_types,
         "anomalies": anomalies,
-        "threshold_mbps": EXPECTED_SPEED_MBPS,
+        "threshold_mbps": threshold_used,
+        "connection_type_thresholds": CONNECTION_TYPE_THRESHOLDS,
     }
 
     log.info(f"Aggregated {count} records for {day} with {len(anomalies)} anomalies")
@@ -461,7 +519,7 @@ def aggregate_hourly():
         log.warning(f"No data found for hour {hour}")
         return None
 
-    anomalies = detect_anomalies(downloads, uploads, pings)
+    anomalies = detect_anomalies(downloads, uploads, pings, connection_types)
     
     # Expect 4 records per hour (15-min intervals: 00, 15, 30, 45)
     # But proceed with partial data (1-4 files) as they become available
@@ -472,7 +530,13 @@ def aggregate_hourly():
         # Note: We still aggregate with whatever data is available
 
     top_servers = [s for s, _ in Counter(servers).most_common(3)]
-    top_connection_types = [ct for ct, _ in Counter(connection_types).most_common(3)]
+    
+    # Collect all unique connection types from the hour
+    unique_connection_types = sorted(list(set(connection_types))) if connection_types else []
+    
+    # Get the threshold for the most common connection type
+    most_common_conn = Counter(connection_types).most_common(1)[0][0] if connection_types else None
+    threshold_used = CONNECTION_TYPE_THRESHOLDS.get(most_common_conn, EXPECTED_SPEED_MBPS)
 
     summary = {
         "hour_ist": target_hour.strftime("%Y-%m-%d %H:00"),
@@ -486,9 +550,10 @@ def aggregate_hourly():
         },
         "servers_top": top_servers,
         "public_ips": sorted(list(ips)),
-        "connection_types": top_connection_types,
+        "connection_types": unique_connection_types,
         "anomalies": anomalies,
-        "threshold_mbps": EXPECTED_SPEED_MBPS,
+        "threshold_mbps": threshold_used,
+        "connection_type_thresholds": CONNECTION_TYPE_THRESHOLDS,
     }
 
     # Upload to hourly bucket
@@ -534,13 +599,16 @@ def aggregate_weekly():
         d += datetime.timedelta(days=1)
 
     if not daily_summaries:
-        log.warning("No daily summaries found for this week")
+        log.error(f"Weekly aggregation failed: No daily summaries found for week {this_monday} to {this_sunday}")
         return None
 
-    all_connection_types = []
+    # Collect all unique connection types from the week
+    all_connection_types = set()
     for ds in daily_summaries:
-        all_connection_types.extend(ds.get("connection_types", []))
-    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+        conn_types = ds.get("connection_types", [])
+        if conn_types:
+            all_connection_types.update(conn_types)
+    unique_connection_types = sorted(list(all_connection_types)) if all_connection_types else []
 
     summary = {
         "week_start": str(this_monday),
@@ -549,7 +617,7 @@ def aggregate_weekly():
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in daily_summaries]), 2),
-        "connection_types": top_connection_types,
+        "connection_types": unique_connection_types,
     }
 
     week_label = f"{this_monday.strftime('%YW%W')}"
@@ -587,13 +655,16 @@ def aggregate_monthly():
         d += datetime.timedelta(days=1)
 
     if not summaries:
-        log.warning(f"No daily summaries found for month {month_tag}")
+        log.error(f"Monthly aggregation failed: No daily summaries found for month {month_tag}")
         return None
 
-    all_connection_types = []
+    # Collect all unique connection types from the month
+    all_connection_types = set()
     for ds in summaries:
-        all_connection_types.extend(ds.get("connection_types", []))
-    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+        conn_types = ds.get("connection_types", [])
+        if conn_types:
+            all_connection_types.update(conn_types)
+    unique_connection_types = sorted(list(all_connection_types)) if all_connection_types else []
 
     summary = {
         "month": month_tag,
@@ -601,7 +672,7 @@ def aggregate_monthly():
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in summaries]), 2),
         "avg_ping": round(mean([x["overall"]["ping_ms"]["avg"] for x in summaries]), 2),
-        "connection_types": top_connection_types,
+        "connection_types": unique_connection_types,
     }
 
     key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
@@ -638,10 +709,13 @@ def aggregate_yearly():
         log.warning(f"No monthly summaries found for {current_year}")
         return None
 
-    all_connection_types = []
+    # Collect all unique connection types from the year
+    all_connection_types = set()
     for ms in summaries:
-        all_connection_types.extend(ms.get("connection_types", []))
-    top_connection_types = [ct for ct, _ in Counter(all_connection_types).most_common(3)] if all_connection_types else []
+        conn_types = ms.get("connection_types", [])
+        if conn_types:
+            all_connection_types.update(conn_types)
+    unique_connection_types = sorted(list(all_connection_types)) if all_connection_types else []
 
     summary = {
         "year": current_year,
@@ -649,7 +723,7 @@ def aggregate_yearly():
         "avg_download": round(mean([x["avg_download"] for x in summaries]), 2),
         "avg_upload": round(mean([x["avg_upload"] for x in summaries]), 2),
         "avg_ping": round(mean([x["avg_ping"] for x in summaries]), 2),
-        "connection_types": top_connection_types,
+        "connection_types": unique_connection_types,
     }
 
     key = f"aggregated/year={current_year}/speed_test_summary.json"

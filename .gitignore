@@ -8,3 +8,4 @@ conda-env/
 __pypackages__/
 *.log
 *.exe.vmoptions
+.conda/*

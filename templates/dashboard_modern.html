@@ -63,6 +63,11 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
+        /* Collapsible Table Content */
+        #tableContent {
+            transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out, margin-top 0.3s ease-in-out;
+        }
+        
         /* Hover Lift Effect */
         .hover-lift:hover {
             transform: translateY(-4px);
@@ -83,6 +88,97 @@
         .chart-container {
             height: 400px;
             width: 100%;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .chart-container:hover::after {
+            content: '🔍 Click to expand';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        /* Modal Overlay */
+        .chart-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+        }
+        
+        .chart-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .chart-modal-content {
+            width: 95vw;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        
+        .chart-modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+        
+        .chart-modal-close:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            transform: scale(1.1);
+        }
+        
+        .chart-modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 20px;
+            padding-left: 10px;
+        }
+        
+        .chart-modal-chart {
+            width: 100%;
+            height: calc(100% - 60px);
         }
         
         /* Badge Styles */
@@ -416,7 +512,7 @@
                         {{ summary.below_expected }} / {{ summary.total_days }}
                     </p>
                     <p class="text-sm text-gray-600">Days Below Expected Speed</p>
-                    <p class="text-xs text-gray-500 mt-2">Threshold: {{ threshold }} Mbps</p>
+                    <p class="text-xs text-gray-500 mt-2">Threshold: Connection-specific (100-200 Mbps)</p>
                 </div>
             </div>
 
@@ -434,20 +530,52 @@
                     </p>
                     <p class="text-xs text-gray-500 mt-2">Format: Name – Host – City (Country)</p>
                 </div>
-                {% if summary.public_ips %}
-                <div class="mt-4">
-                    <p class="text-sm font-semibold text-gray-700 mb-2">Public IP(s) Observed:</p>
+            </div>
+        </div>
+
+        <!-- Public IP and Network Information -->
+        {% if summary.public_ips %}
+        <div class="glass rounded-2xl p-6 mb-8 smooth-transition">
+            <div class="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border-2 border-purple-200">
+                <p class="text-sm font-bold text-purple-800 mb-3 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    </svg>
+                    🌐 Public IP Address(es) Detected:
+                </p>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    {% for ip in summary.public_ips %}
+                    <span class="px-4 py-2 bg-white border-2 border-purple-300 text-purple-900 rounded-lg text-sm font-mono font-bold shadow-sm hover:shadow-md smooth-transition">
+                        {{ ip }}
+                    </span>
+                    {% endfor %}
+                </div>
+                
+                {% if summary.cidr_ranges %}
+                <div class="mt-4 pt-3 border-t-2 border-purple-200">
+                    <p class="text-xs font-bold text-purple-700 mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                        </svg>
+                        📊 CIDR Network Range(s):
+                    </p>
                     <div class="flex flex-wrap gap-2">
-                        {% for ip in summary.public_ips %}
-                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-mono">
-                            {{ ip }}
-                        </span>
+                        {% for cidr_info in summary.cidr_ranges %}
+                        <div class="bg-gradient-to-r from-indigo-100 to-purple-100 border-2 border-indigo-300 rounded-lg px-3 py-2">
+                            <div class="font-mono font-bold text-indigo-900 text-sm">{{ cidr_info.cidr }}</div>
+                            <div class="text-xs text-indigo-700 mt-1">{{ cidr_info.count }} IP{{ 's' if cidr_info.count > 1 else '' }} in range</div>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
                 {% endif %}
+                
+                <p class="text-xs text-purple-700 mt-3 font-medium">
+                    💡 These are the public IP addresses from which speed tests were performed during this period
+                </p>
             </div>
         </div>
+        {% endif %}
 
         <!-- Percentile Statistics (Industry Standard) -->
         {% if percentiles %}
@@ -637,7 +765,7 @@
                     <!-- Performance Quick Filters -->
                     {% if quick_filters.below_threshold > 0 %}
                     <button type="button" onclick="applyQuickFilter('below_threshold')" class="quick-filter-btn px-4 py-2 bg-white border-2 border-orange-300 text-orange-700 rounded-lg hover:bg-orange-50 smooth-transition shadow-sm hover:shadow-md font-medium text-sm">
-                        🔻 Below {{ threshold }}Mbps
+                        🔻 Below 200 Mbps
                         <span class="ml-1 px-2 py-0.5 bg-orange-100 rounded-full text-xs">{{ quick_filters.below_threshold }}</span>
                     </button>
                     {% endif %}
@@ -680,75 +808,71 @@
             </div>
             {% endif %}
             
-            <form method="POST" action="/dashboard" id="filterForm">
-                <!-- Primary Controls Row -->
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 mb-6 border-2 border-blue-200">
-                    <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center">
-                        <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        ⚙️ Primary Controls
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <!-- View Mode -->
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
-                            <select name="mode" id="viewMode" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
-                                <option value="minute" {% if view_mode == 'minute' %}selected{% endif %}>15-min</option>
-                                <option value="hourly" {% if view_mode == 'hourly' %}selected{% endif %}>Hourly</option>
-                                <option value="daily" {% if view_mode == 'daily' %}selected{% endif %}>Daily</option>
-                                <option value="weekly" {% if view_mode == 'weekly' %}selected{% endif %}>Weekly</option>
-                                <option value="monthly" {% if view_mode == 'monthly' %}selected{% endif %}>Monthly</option>
-                                <option value="yearly" {% if view_mode == 'yearly' %}selected{% endif %}>Yearly</option>
-                            </select>
-                        </div>
-
-                        <!-- Period (Days) -->
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Period (Days)</label>
-                            <select name="days" id="periodDays" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
-                                <option value="1" {% if days == 1 %}selected{% endif %}>Last 1 day</option>
-                                <option value="3" {% if days == 3 %}selected{% endif %}>Last 3 days</option>
-                                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
-                                <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
-                                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
-                                <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
-                                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
-                                <option value="180" {% if days == 180 %}selected{% endif %}>Last 180 days</option>
-                                <option value="365" {% if days == 365 %}selected{% endif %}>Last 365 days</option>
-                            </select>
-                        </div>
-
-                        <!-- Threshold -->
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Threshold (Mbps)</label>
-                            <input type="number" name="threshold" id="threshold" value="{{ threshold }}" step="0.1" placeholder="200.0" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-
-                        <!-- Show URLs Checkbox -->
-                        <div class="flex items-end">
-                            <label class="flex items-center space-x-3 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-blue-50 smooth-transition w-full">
-                                <input type="checkbox" name="urls" id="showUrls" value="yes" {% if show_urls %}checked{% endif %} class="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
-                                <span class="text-sm font-semibold text-gray-700 flex items-center">
-                                    <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                    </svg>
-                                    Show URLs
-                                </span>
-                            </label>
-                        </div>
+            <!-- Primary Controls (GET - No Form) -->
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 mb-6 border-2 border-blue-200">
+                <h3 class="text-sm font-bold text-gray-700 mb-4 flex items-center">
+                    <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    ⚙️ Primary Controls
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- View Mode -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
+                        <select id="viewMode" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
+                            <option value="minute" {% if view_mode == 'minute' %}selected{% endif %}>15-min</option>
+                            <option value="hourly" {% if view_mode == 'hourly' %}selected{% endif %}>Hourly</option>
+                            <option value="daily" {% if view_mode == 'daily' %}selected{% endif %}>Daily</option>
+                            <option value="weekly" {% if view_mode == 'weekly' %}selected{% endif %}>Weekly</option>
+                            <option value="monthly" {% if view_mode == 'monthly' %}selected{% endif %}>Monthly</option>
+                            <option value="yearly" {% if view_mode == 'yearly' %}selected{% endif %}>Yearly</option>
+                        </select>
                     </div>
-                    
-                    <!-- Primary Controls Apply Button -->
-                    <div class="mt-4">
-                        <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 smooth-transition shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            Apply
-                        </button>
+
+                    <!-- Period (Days) -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Period (Days)</label>
+                        <select id="periodDays" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium">
+                            <option value="1" {% if days == 1 %}selected{% endif %}>Last 1 day</option>
+                            <option value="3" {% if days == 3 %}selected{% endif %}>Last 3 days</option>
+                            <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                            <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
+                            <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                            <option value="60" {% if days == 60 %}selected{% endif %}>Last 60 days</option>
+                            <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                            <option value="180" {% if days == 180 %}selected{% endif %}>Last 180 days</option>
+                            <option value="365" {% if days == 365 %}selected{% endif %}>Last 365 days</option>
+                        </select>
+                    </div>
+
+                    <!-- Show URLs Checkbox (Client-side only) -->
+                    <div class="flex items-end">
+                        <label class="flex items-center space-x-3 cursor-pointer bg-white px-4 py-2.5 rounded-lg border border-gray-300 hover:bg-blue-50 smooth-transition w-full">
+                            <input type="checkbox" id="showUrls" class="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" onchange="toggleUrlColumns()">
+                            <span class="text-sm font-semibold text-gray-700 flex items-center">
+                                <svg class="w-4 h-4 mr-1 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                                </svg>
+                                Show URLs
+                            </span>
+                        </label>
                     </div>
                 </div>
+
+                <!-- Primary Controls Apply Button -->
+                <div class="mt-4">
+                    <button type="button" onclick="updatePrimaryControls()" class="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 smooth-transition shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Apply
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Filters Form (POST) -->
+            <form method="POST" action="/dashboard" id="filterForm">
 
                 <!-- Advanced Filters (Collapsible) -->
                 <details class="mb-6">
@@ -902,6 +1026,12 @@
                     </span>
                 </h2>
                 <div class="flex items-center space-x-3">
+                    <button onclick="toggleTableCollapse()" id="collapseToggleBtn" class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 smooth-transition shadow-md hover:shadow-lg flex items-center" title="Collapse/Expand Table">
+                        <svg id="collapseIcon" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                        <span id="collapseText">Collapse</span>
+                    </button>
                     <button onclick="exportToCSV()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 smooth-transition shadow-md hover:shadow-lg flex items-center">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -911,8 +1041,10 @@
                 </div>
             </div>
 
-            <!-- Table Connection Filter -->
-            <div class="mb-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+            <!-- Collapsible Table Content -->
+            <div id="tableContent" class="smooth-transition" style="max-height: none; overflow: hidden;">
+                <!-- Table Connection Filter -->
+                <div class="mb-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
                 <div class="flex items-center justify-between mb-3">
                     <label class="text-sm font-semibold text-gray-700 flex items-center">
                         <svg class="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -978,9 +1110,7 @@
                             <th>Server</th>
                             <th>Public IP</th>
                             <th>Connection</th>
-                            {% if show_urls %}
-                            <th>Result URLs</th>
-                            {% endif %}
+                            <th class="url-column" style="display: none;">Result URLs</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1020,14 +1150,22 @@
                             <td class="text-gray-600">{{ record.top_server or 'N/A' }}</td>
                             <td class="text-gray-600">{{ record.public_ip or 'N/A' }}</td>
                             <td>
-                                {% if record.connection_type == 'wifi' or 'wifi' in (record.connection_type or '').lower() %}
+                                {% set conn_type = record.connection_type or 'Unknown' %}
+                                {% if conn_type == 'Wi-Fi (unknown band)' %}
+                                <span class="badge bg-gray-100 text-gray-600">
+                                    <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    Unknown
+                                </span>
+                                {% elif conn_type == 'wifi' or 'wifi' in conn_type.lower() %}
                                 <span class="badge bg-blue-100 text-blue-800">
                                     <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-15.857 21.213 0"/>
                                     </svg>
                                     WiFi
                                 </span>
-                                {% elif record.connection_type == 'ethernet' or 'ethernet' in (record.connection_type or '').lower() %}
+                                {% elif conn_type == 'ethernet' or 'ethernet' in conn_type.lower() %}
                                 <span class="badge bg-gray-100 text-gray-800">
                                     <svg class="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
@@ -1036,12 +1174,11 @@
                                 </span>
                                 {% else %}
                                 <span class="badge bg-orange-100 text-orange-800">
-                                    {{ record.connection_type or 'Unknown' }}
+                                    {{ conn_type }}
                                 </span>
                                 {% endif %}
                             </td>
-                            {% if show_urls %}
-                            <td>
+                            <td class="url-column" style="display: none;">
                                 {% if record.result_urls and record.result_urls|length > 0 %}
                                     {% for url in record.result_urls %}
                                     <a href="{{ url }}" target="_blank" class="inline-flex items-center text-blue-600 hover:text-blue-800 text-xs mr-2 mb-1 smooth-transition">
@@ -1056,12 +1193,13 @@
                                 <span class="text-gray-400 text-xs">No URLs</span>
                                 {% endif %}
                             </td>
-                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            </div>
+            <!-- End Collapsible Table Content -->
         </div>
     </div>
 
@@ -1080,6 +1218,15 @@
         </div>
     </footer>
 
+    <!-- Chart Modal -->
+    <div id="chartModal" class="chart-modal">
+        <div class="chart-modal-content">
+            <button class="chart-modal-close" onclick="closeChartModal()">✕</button>
+            <h3 class="chart-modal-title" id="modalChartTitle">Chart View</h3>
+            <div id="modalChart" class="chart-modal-chart"></div>
+        </div>
+    </div>
+
     <script>
         // Chart Data Preparation
         const chartData = {{ chart_data|tojson }};
@@ -1088,24 +1235,31 @@
         function initSpeedChart() {
             const speedChart = echarts.init(document.getElementById('speedChart'));
             
+            // Determine if we have a large dataset
+            const isLargeDataset = chartData.timestamps.length > 100;
+            
             const option = {
                 backgroundColor: 'transparent',
+                animation: true,
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
-                        type: 'cross',
-                        label: {
-                            backgroundColor: '#6366f1'
+                        type: 'line',
+                        lineStyle: {
+                            color: '#6366f1',
+                            width: 1,
+                            type: 'solid'
                         }
                     },
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     borderColor: '#e5e7eb',
                     borderWidth: 1,
                     textStyle: {
-                        color: '#1f2937'
+                        color: '#1f2937',
+                        fontSize: 12
                     },
                     formatter: function(params) {
-                        let result = params[0].name + '<br/>';
+                        let result = '<strong>' + params[0].name + '</strong><br/>';
                         params.forEach(param => {
                             result += param.marker + ' ' + param.seriesName + ': <b>' + param.value.toFixed(2) + ' Mbps</b><br/>';
                         });
@@ -1113,35 +1267,45 @@
                     }
                 },
                 legend: {
-                    data: ['Download', 'Upload'],
+                    data: ['Download', 'Upload', '200 Mbps Target'],
                     top: 10,
                     textStyle: {
                         color: '#4b5563',
                         fontSize: 12,
                         fontWeight: 600
-                    }
+                    },
+                    itemGap: 15
                 },
                 grid: {
-                    left: '3%',
-                    right: '4%',
-                    bottom: '3%',
+                    left: '8%',
+                    right: '8%',
+                    bottom: '8%',
                     top: '15%',
                     containLabel: true
                 },
                 toolbox: {
                     feature: {
                         dataZoom: {
-                            yAxisIndex: 'none'
+                            yAxisIndex: 'none',
+                            title: {
+                                zoom: 'Zoom',
+                                back: 'Reset Zoom'
+                            }
                         },
-                        restore: {},
+                        restore: {
+                            title: 'Restore'
+                        },
                         saveAsImage: {
                             name: 'speed_chart',
-                            pixelRatio: 2
+                            pixelRatio: 2,
+                            title: 'Save'
                         }
                     },
                     iconStyle: {
                         borderColor: '#667eea'
-                    }
+                    },
+                    top: 10,
+                    right: 20
                 },
                 xAxis: {
                     type: 'category',
@@ -1155,7 +1319,11 @@
                     axisLabel: {
                         color: '#6b7280',
                         rotate: 45,
-                        fontSize: 10
+                        fontSize: 10,
+                        interval: 'auto',
+                        formatter: function(value) {
+                            return value;
+                        }
                     }
                 },
                 yAxis: {
@@ -1163,19 +1331,23 @@
                     name: 'Speed (Mbps)',
                     nameTextStyle: {
                         color: '#6b7280',
-                        fontSize: 12
+                        fontSize: 12,
+                        fontWeight: 600
                     },
                     axisLine: {
+                        show: true,
                         lineStyle: {
                             color: '#d1d5db'
                         }
                     },
                     axisLabel: {
-                        color: '#6b7280'
+                        color: '#6b7280',
+                        fontSize: 11
                     },
                     splitLine: {
                         lineStyle: {
-                            color: '#f3f4f6'
+                            color: '#f3f4f6',
+                            type: 'dashed'
                         }
                     }
                 },
@@ -1183,53 +1355,70 @@
                     {
                         name: 'Download',
                         type: 'line',
-                        smooth: true,
-                        symbol: 'circle',
-                        symbolSize: 6,
-                        sampling: 'average',
+                        smooth: 0.3,
+                        symbol: isLargeDataset ? 'none' : 'circle',
+                        symbolSize: 4,
+                        sampling: 'lttb', // Use Largest-Triangle-Three-Buckets algorithm for downsampling
                         itemStyle: {
-                            color: '#6366f1'
-                        },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                {
-                                    offset: 0,
-                                    color: 'rgba(99, 102, 241, 0.3)'
-                                },
-                                {
-                                    offset: 1,
-                                    color: 'rgba(99, 102, 241, 0.05)'
-                                }
-                            ])
+                            color: '#3b82f6'
                         },
                         lineStyle: {
-                            width: 3
+                            width: 2,
+                            color: '#3b82f6'
+                        },
+                        emphasis: {
+                            focus: 'series',
+                            lineStyle: {
+                                width: 3
+                            }
                         },
                         data: chartData.download,
                         markLine: {
                             silent: true,
+                            symbol: 'none',
                             lineStyle: {
-                                color: '#6366f1',
-                                type: 'dashed',
-                                width: 2
+                                color: '#10b981',
+                                type: 'solid',
+                                width: 2,
+                                opacity: 0.8
+                            },
+                            label: {
+                                show: true,
+                                position: 'insideEndTop',
+                                formatter: '200 Mbps',
+                                color: '#10b981',
+                                fontSize: 11,
+                                fontWeight: 'bold',
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                padding: [2, 4],
+                                borderRadius: 3
                             },
                             data: [
                                 {
-                                    type: 'average',
-                                    name: 'Average'
+                                    yAxis: 200,
+                                    name: '200 Mbps Target'
                                 },
                                 {
-                                    yAxis: 200,
-                                    name: 'Target (200 Mbps)',
+                                    type: 'average',
+                                    name: 'Avg Download',
                                     lineStyle: {
-                                        color: '#10b981',
-                                        type: 'solid',
-                                        width: 2
+                                        color: '#3b82f6',
+                                        type: 'dashed',
+                                        width: 1.5,
+                                        opacity: 0.7
                                     },
                                     label: {
                                         show: true,
-                                        position: 'end',
-                                        formatter: '200 Mbps Target'
+                                        formatter: function(params) {
+                                            return 'Avg: ' + params.value.toFixed(2);
+                                        },
+                                        position: 'insideEndBottom',
+                                        color: '#3b82f6',
+                                        fontSize: 10,
+                                        fontWeight: 'bold',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                        padding: [2, 4],
+                                        borderRadius: 3
                                     }
                                 }
                             ]
@@ -1238,38 +1427,49 @@
                     {
                         name: 'Upload',
                         type: 'line',
-                        smooth: true,
-                        symbol: 'circle',
-                        symbolSize: 6,
-                        sampling: 'average',
+                        smooth: 0.3,
+                        symbol: isLargeDataset ? 'none' : 'circle',
+                        symbolSize: 4,
+                        sampling: 'lttb',
                         itemStyle: {
-                            color: '#a855f7'
-                        },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                {
-                                    offset: 0,
-                                    color: 'rgba(168, 85, 247, 0.3)'
-                                },
-                                {
-                                    offset: 1,
-                                    color: 'rgba(168, 85, 247, 0.05)'
-                                }
-                            ])
+                            color: '#8b5cf6'
                         },
                         lineStyle: {
-                            width: 3
+                            width: 2,
+                            color: '#8b5cf6'
+                        },
+                        emphasis: {
+                            focus: 'series',
+                            lineStyle: {
+                                width: 3
+                            }
                         },
                         data: chartData.upload,
                         markLine: {
                             silent: true,
+                            symbol: 'none',
                             lineStyle: {
-                                color: '#a855f7',
-                                type: 'dashed'
+                                color: '#8b5cf6',
+                                type: 'dashed',
+                                width: 1.5,
+                                opacity: 0.7
                             },
                             data: [{
                                 type: 'average',
-                                name: 'Average'
+                                name: 'Avg Upload',
+                                label: {
+                                    show: true,
+                                    formatter: function(params) {
+                                        return 'Avg: ' + params.value.toFixed(2);
+                                    },
+                                    position: 'insideEndBottom',
+                                    color: '#8b5cf6',
+                                    fontSize: 10,
+                                    fontWeight: 'bold',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                    padding: [2, 4],
+                                    borderRadius: 3
+                                }
                             }]
                         }
                     }
@@ -1278,11 +1478,17 @@
                     {
                         type: 'inside',
                         start: 0,
-                        end: 100
+                        end: 100,
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true
                     },
                     {
+                        type: 'slider',
+                        show: isLargeDataset,
                         start: 0,
                         end: 100,
+                        height: 20,
+                        bottom: 10,
                         handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
                         handleSize: '80%',
                         handleStyle: {
@@ -1290,12 +1496,14 @@
                         },
                         textStyle: {
                             color: '#6b7280'
-                        }
+                        },
+                        borderColor: '#e5e7eb'
                     }
                 ]
             };
             
             speedChart.setOption(option);
+            speedChartInstance = speedChart; // Store instance
             
             // Responsive resize
             window.addEventListener('resize', () => speedChart.resize());
@@ -1305,63 +1513,80 @@
         function initPingChart() {
             const pingChart = echarts.init(document.getElementById('pingChart'));
             
+            const isLargeDataset = chartData.timestamps.length > 100;
+            
             const option = {
                 backgroundColor: 'transparent',
+                animation: true,
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
-                        type: 'shadow',
-                        label: {
-                            backgroundColor: '#10b981'
+                        type: 'line',
+                        lineStyle: {
+                            color: '#10b981',
+                            width: 1,
+                            type: 'solid'
                         }
                     },
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     borderColor: '#e5e7eb',
                     borderWidth: 1,
                     textStyle: {
-                        color: '#1f2937'
+                        color: '#1f2937',
+                        fontSize: 12
                     },
                     formatter: function(params) {
-                        return params[0].name + '<br/>' + 
+                        return '<strong>' + params[0].name + '</strong><br/>' + 
                                params[0].marker + ' Ping: <b>' + params[0].value.toFixed(2) + ' ms</b>';
                     }
                 },
                 legend: {
-                    data: ['Ping'],
+                    data: ['Ping', '15ms Target'],
                     top: 10,
                     textStyle: {
                         color: '#4b5563',
                         fontSize: 12,
                         fontWeight: 600
-                    }
+                    },
+                    itemGap: 15
                 },
                 grid: {
-                    left: '3%',
-                    right: '4%',
-                    bottom: '3%',
+                    left: '8%',
+                    right: '8%',
+                    bottom: '8%',
                     top: '15%',
                     containLabel: true
                 },
                 toolbox: {
                     feature: {
                         dataZoom: {
-                            yAxisIndex: 'none'
+                            yAxisIndex: 'none',
+                            title: {
+                                zoom: 'Zoom',
+                                back: 'Reset Zoom'
+                            }
                         },
-                        restore: {},
+                        restore: {
+                            title: 'Restore'
+                        },
                         saveAsImage: {
                             name: 'ping_chart',
-                            pixelRatio: 2
+                            pixelRatio: 2,
+                            title: 'Save'
                         }
                     },
                     iconStyle: {
                         borderColor: '#10b981'
-                    }
+                    },
+                    top: 10,
+                    right: 20
                 },
                 xAxis: {
                     type: 'category',
                     boundaryGap: false,
                     data: chartData.timestamps,
                     axisLine: {
+                        show: true,
                         lineStyle: {
                             color: '#d1d5db'
                         }
@@ -1369,7 +1594,8 @@
                     axisLabel: {
                         color: '#6b7280',
                         rotate: 45,
-                        fontSize: 10
+                        fontSize: 10,
+                        interval: 'auto'
                     }
                 },
                 yAxis: {
@@ -1377,19 +1603,23 @@
                     name: 'Latency (ms)',
                     nameTextStyle: {
                         color: '#6b7280',
-                        fontSize: 12
+                        fontSize: 12,
+                        fontWeight: 600
                     },
                     axisLine: {
+                        show: true,
                         lineStyle: {
                             color: '#d1d5db'
                         }
                     },
                     axisLabel: {
-                        color: '#6b7280'
+                        color: '#6b7280',
+                        fontSize: 11
                     },
                     splitLine: {
                         lineStyle: {
-                            color: '#f3f4f6'
+                            color: '#f3f4f6',
+                            type: 'dashed'
                         }
                     }
                 },
@@ -1397,67 +1627,70 @@
                     {
                         name: 'Ping',
                         type: 'line',
-                        smooth: true,
-                        symbol: 'circle',
-                        symbolSize: 6,
-                        sampling: 'average',
+                        smooth: 0.3,
+                        symbol: isLargeDataset ? 'none' : 'circle',
+                        symbolSize: 4,
+                        sampling: 'lttb',
                         itemStyle: {
                             color: '#10b981'
                         },
-                        areaStyle: {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                {
-                                    offset: 0,
-                                    color: 'rgba(16, 185, 129, 0.3)'
-                                },
-                                {
-                                    offset: 1,
-                                    color: 'rgba(16, 185, 129, 0.05)'
-                                }
-                            ])
-                        },
                         lineStyle: {
-                            width: 3
+                            width: 2,
+                            color: '#10b981'
+                        },
+                        emphasis: {
+                            focus: 'series',
+                            lineStyle: {
+                                width: 3
+                            }
                         },
                         data: chartData.ping,
                         markLine: {
                             silent: true,
+                            symbol: 'none',
                             lineStyle: {
                                 color: '#10b981',
-                                type: 'dashed',
-                                width: 2
+                                type: 'solid',
+                                width: 2,
+                                opacity: 0.8
+                            },
+                            label: {
+                                show: true,
+                                position: 'insideEndTop',
+                                formatter: '< 15ms',
+                                color: '#10b981',
+                                fontSize: 11,
+                                fontWeight: 'bold',
+                                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                padding: [2, 4],
+                                borderRadius: 3
                             },
                             data: [
                                 {
-                                    type: 'average',
-                                    name: 'Average'
+                                    yAxis: 15,
+                                    name: '15ms Target'
                                 },
                                 {
-                                    yAxis: 20,
-                                    name: 'Excellent (<20ms)',
+                                    type: 'average',
+                                    name: 'Avg Ping',
                                     lineStyle: {
                                         color: '#10b981',
-                                        type: 'dotted',
-                                        width: 2
+                                        type: 'dashed',
+                                        width: 1.5,
+                                        opacity: 0.7
                                     },
                                     label: {
                                         show: true,
-                                        position: 'insideEndTop',
-                                        formatter: 'Excellent: <20ms'
-                                    }
-                                },
-                                {
-                                    yAxis: 50,
-                                    name: 'Good (<50ms)',
-                                    lineStyle: {
-                                        color: '#fbbf24',
-                                        type: 'dotted',
-                                        width: 2
-                                    },
-                                    label: {
-                                        show: true,
-                                        position: 'insideEndTop',
-                                        formatter: 'Good: <50ms'
+                                        formatter: function(params) {
+                                            return 'Avg: ' + params.value.toFixed(2) + 'ms';
+                                        },
+                                        position: 'insideEndBottom',
+                                        color: '#10b981',
+                                        fontSize: 10,
+                                        fontWeight: 'bold',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                        padding: [2, 4],
+                                        borderRadius: 3
                                     }
                                 }
                             ]
@@ -1468,11 +1701,17 @@
                     {
                         type: 'inside',
                         start: 0,
-                        end: 100
+                        end: 100,
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true
                     },
                     {
+                        type: 'slider',
+                        show: isLargeDataset,
                         start: 0,
                         end: 100,
+                        height: 20,
+                        bottom: 10,
                         handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
                         handleSize: '80%',
                         handleStyle: {
@@ -1480,12 +1719,14 @@
                         },
                         textStyle: {
                             color: '#6b7280'
-                        }
+                        },
+                        borderColor: '#e5e7eb'
                     }
                 ]
             };
             
             pingChart.setOption(option);
+            pingChartInstance = pingChart; // Store instance
             
             // Responsive resize
             window.addEventListener('resize', () => pingChart.resize());
@@ -1493,15 +1734,19 @@
 
         // Initialize Connection Type Comparison Chart (Combined Download & Upload)
         function initConnectionTypeCharts() {
+            const isLargeDataset = chartData.timestamps.length > 100;
+            
             // Group data by connection type - use PRIMARY (first) connection only
             const connectionData = {};
             
             chartData.timestamps.forEach((timestamp, index) => {
                 const rawConnection = chartData.connection_types ? chartData.connection_types[index] : 'Unknown';
-                
-                // If comma-separated (mixed connection during test), take ONLY the first one
-                // This represents the primary connection type for that measurement
                 const connection = rawConnection.split(',')[0].trim();
+                
+                // Filter out "Wi-Fi (unknown band)"
+                if (connection === 'Wi-Fi (unknown band)') {
+                    return;
+                }
                 
                 if (!connectionData[connection]) {
                     connectionData[connection] = {
@@ -1515,55 +1760,29 @@
                 connectionData[connection].timestamps.push(timestamp);
             });
 
-            // Debug: Log connection types found
-            console.log('Connection types found:', Object.keys(connectionData));
+            // Professional color palette - more distinct and vibrant
+            const colorPalette = {
+                'Wi-Fi 2.4GHz': '#ff6b6b',    // Bright coral red
+                'Wi-Fi 5GHz': '#4ecdc4',      // Bright teal
+                'Ethernet': '#95a5f6',        // Soft blue-purple
+                'Unknown': '#a8a29e'          // Warm gray (stone-400)
+            };
 
-            // Function to get color based on EXACT connection type
             function getColorForConnection(connectionType) {
                 const conn = connectionType.trim();
-                
-                // Exact match for each connection type with custom colors
-                if (conn === 'Wi-Fi 2.4GHz') {
-                    return '#e26036'; // Orange-Red for 2.4GHz
-                }
-                if (conn === 'Wi-Fi 5GHz') {
-                    return '#38686f'; // Teal for 5GHz
-                }
-                if (conn === 'Ethernet') {
-                    return '#462749'; // Dark Purple for Ethernet
-                }
-                if (conn === 'Unknown') {
-                    return '#b23a48'; // Crimson Red for Unknown
-                }
-                
-                // Fallback for any other variations
-                const connLower = conn.toLowerCase();
-                if (connLower.includes('2.4')) return '#e26036';
-                if (connLower.includes('5ghz') || connLower.includes('5 ghz')) return '#38686f';
-                if (connLower.includes('ethernet')) return '#462749';
-                
-                return '#b23a48'; // Crimson Red
+                return colorPalette[conn] || '#95a5a6'; // Gray fallback
             }
 
-            // Create combined series for both download and upload
             const combinedSeries = [];
             const legendData = [];
-            
-            // Define the order for connection types
             const connectionOrder = ['Wi-Fi 2.4GHz', 'Wi-Fi 5GHz', 'Ethernet', 'Unknown'];
-            
-            // Get thresholds from backend config
             const connectionThresholds = {{ connection_type_thresholds|tojson }};
             
-            // Sort connection types according to defined order
             const sortedConnections = Object.keys(connectionData).sort((a, b) => {
                 let indexA = connectionOrder.indexOf(a);
                 let indexB = connectionOrder.indexOf(b);
-                
-                // If not in predefined order, put at end
                 if (indexA === -1) indexA = 999;
                 if (indexB === -1) indexB = 999;
-                
                 return indexA - indexB;
             });
             
@@ -1572,34 +1791,29 @@
                 const color = getColorForConnection(conn);
                 const threshold = connectionThresholds[conn];
                 
-                console.log(`Connection: "${conn}" => Color: ${color}, Threshold: ${threshold}`); // Debug log
+                legendData.push(connName);
                 
-                legendData.push(connName); // Only add connection name once to legend
-                
-                // Download series - SOLID line with threshold markLine
+                // Download series - Clean solid line
                 combinedSeries.push({
                     name: connName,
                     type: 'line',
-                    smooth: true,
-                    symbol: 'circle',
-                    symbolSize: 6,
+                    smooth: 0.3,
+                    symbol: isLargeDataset ? 'none' : 'circle',
+                    symbolSize: 4,
+                    sampling: 'lttb',
                     data: connectionData[conn].download,
                     itemStyle: {
                         color: color
                     },
                     lineStyle: {
-                        width: 3,
+                        width: isLargeDataset ? 2 : 2.5,
                         type: 'solid',
                         color: color
                     },
                     emphasis: {
                         focus: 'series',
-                        itemStyle: {
-                            color: color
-                        },
                         lineStyle: {
-                            color: color,
-                            width: 4
+                            width: 3.5
                         }
                     },
                     markLine: threshold ? {
@@ -1608,17 +1822,18 @@
                         lineStyle: {
                             color: color,
                             type: 'dashed',
-                            width: 2,
-                            opacity: 0.7
+                            width: 1.5,
+                            opacity: 0.6
                         },
                         label: {
-                            formatter: `${threshold} Mbps`,
+                            show: !isLargeDataset,
+                            formatter: `${threshold}`,
                             position: 'insideEndTop',
                             color: color,
                             fontSize: 10,
                             fontWeight: 'bold',
-                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                            padding: 2,
+                            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                            padding: [2, 4],
                             borderRadius: 3
                         },
                         data: [{
@@ -1627,56 +1842,53 @@
                     } : undefined
                 });
                 
-                // Upload series - DASHED line (same color, different style)
+                // Upload series - Dotted line for distinction
                 combinedSeries.push({
                     name: connName,
                     type: 'line',
-                    smooth: true,
-                    symbol: 'triangle',
-                    symbolSize: 6,
+                    smooth: 0.3,
+                    symbol: isLargeDataset ? 'none' : 'emptyCircle',
+                    symbolSize: 3,
+                    sampling: 'lttb',
                     data: connectionData[conn].upload,
                     itemStyle: {
-                        color: color
+                        color: color,
+                        opacity: 0.8
                     },
                     lineStyle: {
-                        width: 2.5,
-                        type: 'dashed',
-                        color: color
+                        width: isLargeDataset ? 1.5 : 2,
+                        type: [4, 4], // Dotted pattern
+                        color: color,
+                        opacity: 0.8
                     },
                     emphasis: {
                         focus: 'series',
-                        itemStyle: {
-                            color: color
-                        },
                         lineStyle: {
-                            color: color,
-                            width: 3.5
+                            width: 3,
+                            opacity: 1
                         }
                     }
                 });
             });
 
-            // Initialize combined chart
             const connectionChart = echarts.init(document.getElementById('connectionTypeChart'));
             
             connectionChart.setOption({
                 backgroundColor: 'transparent',
+                animation: !isLargeDataset,
                 tooltip: {
                     trigger: 'axis',
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     borderColor: '#e5e7eb',
                     borderWidth: 1,
-                    textStyle: { color: '#1f2937' },
+                    textStyle: { color: '#1f2937', fontSize: 12 },
                     formatter: function(params) {
                         let result = '<strong>' + params[0].axisValue + '</strong><br/>';
-                        
-                        // Group by connection type
                         const grouped = {};
                         params.forEach(param => {
                             if (!grouped[param.seriesName]) {
                                 grouped[param.seriesName] = { download: null, upload: null };
                             }
-                            // Solid line = download, dashed = upload
                             if (param.seriesIndex % 2 === 0) {
                                 grouped[param.seriesName].download = param.value;
                             } else {
@@ -1684,19 +1896,17 @@
                             }
                         });
                         
-                        // Format output
                         Object.keys(grouped).forEach(connName => {
                             result += '<div style="margin: 4px 0;">';
                             result += '<strong>' + connName + ':</strong><br/>';
                             if (grouped[connName].download !== null) {
-                                result += '&nbsp;&nbsp;⬇️ Download: <b>' + grouped[connName].download.toFixed(2) + ' Mbps</b><br/>';
+                                result += '&nbsp;&nbsp;⬇️ <b>' + grouped[connName].download.toFixed(2) + '</b> Mbps<br/>';
                             }
                             if (grouped[connName].upload !== null) {
-                                result += '&nbsp;&nbsp;⬆️ Upload: <b>' + grouped[connName].upload.toFixed(2) + ' Mbps</b>';
+                                result += '&nbsp;&nbsp;⬆️ <b>' + grouped[connName].upload.toFixed(2) + '</b> Mbps';
                             }
                             result += '</div>';
                         });
-                        
                         return result;
                     }
                 },
@@ -1704,34 +1914,26 @@
                     data: legendData,
                     top: 10,
                     textStyle: { color: '#4b5563', fontSize: 12, fontWeight: 600 },
-                    itemGap: 20,
-                    // Enable selection for toggling visibility
-                    selected: (() => {
-                        const selected = {};
-                        legendData.forEach(name => selected[name] = true);
-                        return selected;
-                    })(),
-                    // Custom formatter to show visual indicators
-                    formatter: function(name) {
-                        return name;
-                    }
+                    itemGap: 20
                 },
                 grid: {
-                    left: '3%',
-                    right: '4%',
-                    bottom: '8%',
+                    left: '8%',
+                    right: '8%',
+                    bottom: isLargeDataset ? '12%' : '8%',
                     top: '15%',
                     containLabel: true
                 },
                 toolbox: {
                     feature: {
                         dataZoom: {
-                            yAxisIndex: 'none'
+                            yAxisIndex: 'none',
+                            title: { zoom: 'Zoom', back: 'Reset' }
                         },
-                        restore: {},
+                        restore: { title: 'Restore' },
                         saveAsImage: {
-                            name: 'connection_type_comparison',
-                            pixelRatio: 2
+                            name: 'connection_comparison',
+                            pixelRatio: 2,
+                            title: 'Save'
                         }
                     },
                     iconStyle: {
@@ -1745,41 +1947,114 @@
                     boundaryGap: false,
                     data: chartData.timestamps,
                     axisLine: { lineStyle: { color: '#d1d5db' } },
-                    axisLabel: { color: '#6b7280', rotate: 45, fontSize: 10 }
+                    axisLabel: { 
+                        color: '#6b7280', 
+                        rotate: 45, 
+                        fontSize: 10,
+                        interval: isLargeDataset ? 'auto' : 0
+                    }
                 },
                 yAxis: {
                     type: 'value',
                     name: 'Speed (Mbps)',
-                    nameTextStyle: { color: '#6b7280', fontSize: 12 },
-                    axisLine: { lineStyle: { color: '#d1d5db' } },
-                    axisLabel: { color: '#6b7280' },
-                    splitLine: { lineStyle: { color: '#f3f4f6' } }
+                    nameTextStyle: { color: '#6b7280', fontSize: 12, fontWeight: 600 },
+                    axisLine: { show: true, lineStyle: { color: '#d1d5db' } },
+                    axisLabel: { color: '#6b7280', fontSize: 11 },
+                    splitLine: { lineStyle: { color: '#f3f4f6', type: 'dashed' } }
                 },
                 series: combinedSeries,
                 dataZoom: [
                     {
                         type: 'inside',
                         start: 0,
-                        end: 100
+                        end: 100,
+                        zoomOnMouseWheel: true,
+                        moveOnMouseMove: true
                     },
                     {
+                        type: 'slider',
+                        show: isLargeDataset,
                         start: 0,
                         end: 100,
+                        height: 20,
+                        bottom: 10,
                         handleIcon: 'path://M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.4v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z',
                         handleSize: '80%',
-                        handleStyle: {
-                            color: '#667eea'
-                        },
-                        textStyle: {
-                            color: '#6b7280'
-                        }
+                        handleStyle: { color: '#667eea' },
+                        textStyle: { color: '#6b7280' },
+                        borderColor: '#e5e7eb'
                     }
                 ]
             });
 
-            // Responsive resize
+            connectionChartInstance = connectionChart;
             window.addEventListener('resize', () => connectionChart.resize());
         }
+
+        // Open chart in modal (fullscreen)
+        function openChartModal(chartType, title) {
+            const modal = document.getElementById('chartModal');
+            const modalChartDiv = document.getElementById('modalChart');
+            const modalTitle = document.getElementById('modalChartTitle');
+            
+            // Set title
+            modalTitle.textContent = title;
+            
+            // Show modal
+            modal.classList.add('active');
+            
+            // Dispose previous modal chart if exists
+            if (modalChartInstance) {
+                modalChartInstance.dispose();
+            }
+            
+            // Initialize new chart in modal
+            modalChartInstance = echarts.init(modalChartDiv);
+            
+            // Get option from the corresponding chart
+            let option = null;
+            if (chartType === 'speed') {
+                option = speedChartInstance.getOption();
+            } else if (chartType === 'ping') {
+                option = pingChartInstance.getOption();
+            } else if (chartType === 'connection') {
+                option = connectionChartInstance.getOption();
+            }
+            
+            // Set option to modal chart
+            if (option) {
+                modalChartInstance.setOption(option);
+            }
+            
+            // Resize after a short delay to ensure proper rendering
+            setTimeout(() => {
+                modalChartInstance.resize();
+            }, 100);
+            
+            // Prevent body scroll when modal is open
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Close chart modal
+        function closeChartModal() {
+            const modal = document.getElementById('chartModal');
+            modal.classList.remove('active');
+            
+            // Dispose modal chart
+            if (modalChartInstance) {
+                modalChartInstance.dispose();
+                modalChartInstance = null;
+            }
+            
+            // Restore body scroll
+            document.body.style.overflow = '';
+        }
+
+        // Global variables to store chart instances
+        let speedChartInstance = null;
+        let pingChartInstance = null;
+        let connectionChartInstance = null;
+        let modalChartInstance = null;
 
         // Initialize charts on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1790,6 +2065,33 @@
             
             // Add event listener for view mode changes
             document.getElementById('viewMode').addEventListener('change', updatePeriodLabel);
+            
+            // Add click listeners to charts for modal
+            document.getElementById('speedChart').addEventListener('click', function() {
+                openChartModal('speed', 'Download & Upload Speed');
+            });
+            
+            document.getElementById('pingChart').addEventListener('click', function() {
+                openChartModal('ping', 'Ping Latency');
+            });
+            
+            document.getElementById('connectionTypeChart').addEventListener('click', function() {
+                openChartModal('connection', 'Performance by Connection Type');
+            });
+            
+            // Close modal on background click
+            document.getElementById('chartModal').addEventListener('click', function(e) {
+                if (e.target.id === 'chartModal') {
+                    closeChartModal();
+                }
+            });
+            
+            // Close modal on ESC key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeChartModal();
+                }
+            });
         });
 
         // Update period label based on view mode
@@ -1838,10 +2140,10 @@
                 
                 switch(filterType) {
                     case 'below_threshold':
-                        // Column 1 is download speed
+                        // Column 1 is download speed - use fixed 200 Mbps threshold
                         const downloadText = cells[1]?.textContent.trim();
                         const download = parseFloat(downloadText);
-                        if (download >= {{ threshold }}) {
+                        if (download >= 200) {
                             shouldHide = true;
                         }
                         break;
@@ -1890,6 +2192,39 @@
             // Scroll to table
             table.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
+
+        // Toggle URL column visibility (client-side only, no reload)
+        function toggleUrlColumns() {
+            const checkbox = document.getElementById('showUrls');
+            const urlColumns = document.querySelectorAll('.url-column');
+            const displayValue = checkbox.checked ? '' : 'none';
+            
+            urlColumns.forEach(col => {
+                col.style.display = displayValue;
+            });
+            
+            // Save preference to localStorage
+            localStorage.setItem('showUrls', checkbox.checked);
+        }
+
+        // Update URL with primary controls (mode and days) using GET
+        function updatePrimaryControls() {
+            const mode = document.getElementById('viewMode').value;
+            const days = document.getElementById('periodDays').value;
+            
+            // Navigate to new URL with query parameters
+            window.location.href = `/dashboard?mode=${mode}&days=${days}`;
+        }
+
+        // Initialize URL column visibility on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const showUrls = localStorage.getItem('showUrls') === 'true';
+            const checkbox = document.getElementById('showUrls');
+            if (checkbox) {
+                checkbox.checked = showUrls;
+                toggleUrlColumns();
+            }
+        });
 
         // Clear Quick Filters (Show all rows)
         function clearQuickFilters() {
@@ -1997,6 +2332,34 @@
             const checkboxes = document.querySelectorAll('.connection-filter');
             checkboxes.forEach(cb => cb.checked = false);
             filterTableByConnection();
+        }
+
+        // Toggle table collapse/expand
+        function toggleTableCollapse() {
+            const tableContent = document.getElementById('tableContent');
+            const collapseIcon = document.getElementById('collapseIcon');
+            const collapseText = document.getElementById('collapseText');
+            const collapseBtn = document.getElementById('collapseToggleBtn');
+            
+            if (tableContent.style.maxHeight === 'none' || tableContent.style.maxHeight === '') {
+                // Collapse
+                tableContent.style.maxHeight = '0';
+                tableContent.style.opacity = '0';
+                tableContent.style.marginTop = '0';
+                collapseIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>';
+                collapseText.textContent = 'Expand';
+                collapseBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600');
+                collapseBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+            } else {
+                // Expand
+                tableContent.style.maxHeight = 'none';
+                tableContent.style.opacity = '1';
+                tableContent.style.marginTop = '';
+                collapseIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>';
+                collapseText.textContent = 'Collapse';
+                collapseBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                collapseBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
+            }
         }
 
         // Export to CSV (only visible rows)

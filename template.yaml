@@ -68,6 +68,7 @@ Globals:
         AWS_REGION1: ap-south-1
         EXPECTED_SPEED_MBPS: !Ref ExpectedSpeedMbps
         TOLERANCE_PERCENT: !Ref TolerancePercent
+        CONNECTION_TYPE_THRESHOLDS: '{"Wi-Fi 5GHz": 200, "Wi-Fi 2.4GHz": 100, "Ethernet": 200, "Unknown": 150}'
     LoggingConfig:
       LogFormat: JSON
       ApplicationLogLevel: INFO
@@ -490,6 +491,30 @@ Resources:
           DefaultValue: 0
           Unit: Count
 
+  WeeklyAggregationFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '{ $.level = "ERROR" && $.message = "*Weekly aggregation failed*" }'
+      MetricTransformations:
+        - MetricName: WeeklyAggregationFailures
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
+  MonthlyAggregationFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref AggregatorLogGroup
+      FilterPattern: '{ $.level = "ERROR" && $.message = "*Monthly aggregation failed*" }'
+      MetricTransformations:
+        - MetricName: MonthlyAggregationFailures
+          MetricNamespace: vd-speed-test/Logs
+          MetricValue: "1"
+          DefaultValue: 0
+          Unit: Count
+
   # ---------------- Alarms -> SNS ----------------
   AlertsTopic:
     Type: AWS::SNS::Topic
@@ -562,6 +587,36 @@ Resources:
       EvaluationPeriods: 2
       DatapointsToAlarm: 2
       Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+
+  WeeklyAggregationFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-weekly-aggregation-failure-${Environment}'
+      AlarmDescription: Alert when weekly aggregation fails (no daily data found)
+      MetricName: WeeklyAggregationFailures
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 604800
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref AlertsTopic ]
+
+  MonthlyAggregationFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'vd-speedtest-monthly-aggregation-failure-${Environment}'
+      AlarmDescription: Alert when monthly aggregation fails (no daily data found)
+      MetricName: MonthlyAggregationFailures
+      Namespace: vd-speed-test/Logs
+      Statistic: Sum
+      Period: 2592000
+      EvaluationPeriods: 1
+      Threshold: 0
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [ !Ref AlertsTopic ]

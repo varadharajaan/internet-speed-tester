@@ -135,16 +135,28 @@ def get_windows_network_type():
             capture_output=True, text=True, check=False
         )
         out = res.stdout.strip()
+        
+        # No WiFi interface found = Ethernet
         if not out or "There is no wireless interface" in out:
             return "Ethernet", None
-        if "State" in out and "connected" not in out.lower():
-            return "Ethernet or disconnected", None
-
-        # Extract SSID
+        
+        # Check if WiFi is actually connected (not just available)
+        state_match = re.search(r"State\s*:\s*(.+)", out)
+        if state_match:
+            state = state_match.group(1).strip().lower()
+            # If WiFi is not connected, assume Ethernet is being used
+            if "connected" not in state:
+                return "Ethernet", None
+        
+        # WiFi is connected - extract SSID
         ssid_match = re.search(r"SSID\s*:\s*(.+)", out)
         ssid = ssid_match.group(1).strip() if ssid_match else None
+        
+        # If no SSID found, WiFi adapter exists but not connected
+        if not ssid:
+            return "Ethernet", None
 
-        # Extract fields
+        # Extract band information
         radio = re.search(r"Radio type\s*:\s*(.+)", out)
         ch = re.search(r"Channel\s*:\s*(\d+)", out)
         if radio:
@@ -156,6 +168,8 @@ def get_windows_network_type():
         if ch:
             c = int(ch.group(1))
             return ("Wi-Fi 5GHz" if c >= 36 else "Wi-Fi 2.4GHz"), ssid
+        
+        # WiFi is connected but band is unknown - still return WiFi
         return "Wi-Fi (unknown band)", ssid
     except Exception as e:
         log.warning(f"Windows network detection failed: {e}")
