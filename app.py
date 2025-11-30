@@ -893,5 +893,5 @@ def api_data():
 
 # --- Local Run ---------------------------------------------------------------
 if __name__ == "__main__":
-    log.info("🚀 Starting Flask dashboard locally...")
+    log.info("Starting Flask dashboard locally...")
     app.run(host="0.0.0.0", port=8080, debug=True)

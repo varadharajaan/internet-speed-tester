@@ -1,0 +1,7 @@
+# SAM build ignore patterns
+.conda/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/

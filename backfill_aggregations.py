@@ -63,9 +63,9 @@ def load_all_minute_data():
                     "server_host": data.get("server_host", ""),
                 })
             except Exception as e:
-                print(f"⚠️  Skip {key}: {e}")
+                print(f"WARNING: Skip {key}: {e}")
     
-    print(f"✅ Loaded {len(minute_records)} minute-level records")
+    print(f"Loaded {len(minute_records)} minute-level records")
     return minute_records
 
 def load_all_daily_summaries():
@@ -91,7 +91,7 @@ def load_all_daily_summaries():
             except Exception as e:
                 print(f"⚠️  Skip {key}: {e}")
     
-    print(f"✅ Loaded {len(summaries)} daily summaries")
+    print(f"Loaded {len(summaries)} daily summaries")
     return summaries
 
 def get_week_bounds(date):
@@ -213,7 +213,7 @@ def backfill_weekly(daily_summaries, force=False):
             )
             
             weeks_created += 1
-            print(f"✅ {current_monday} to {sunday} ({week_summary['days']} days) → s3://{S3_BUCKET_WEEKLY}/{key}")
+            print(f"SUCCESS: {current_monday} to {sunday} ({week_summary['days']} days) -> s3://{S3_BUCKET_WEEKLY}/{key}")
         
         current_monday += datetime.timedelta(days=7)
     
@@ -359,15 +359,15 @@ def backfill_monthly(daily_summaries, force=False):
             )
             
             months_created += 1
-            print(f"✅ {year}-{month:02d} ({month_summary['days']} days) → s3://{S3_BUCKET_MONTHLY}/{key}")
+            print(f"SUCCESS: {year}-{month:02d} ({month_summary['days']} days) -> s3://{S3_BUCKET_MONTHLY}/{key}")
     
     if months_skipped > 0:
-        print(f"⏭️  Skipped {months_skipped} incomplete month(s). Use --force to include them.")
-    print(f"\n🎉 Created {months_created} monthly aggregations")
+        print(f"Skipped {months_skipped} incomplete month(s). Use --force to include them.")
+    print(f"\nCreated {months_created} monthly aggregations")
 
 def backfill_yearly(monthly_summaries, force=False):
     """Create yearly aggregations from monthly data."""
-    print("\n📅 Backfilling yearly aggregations...")
+    print("\nBackfilling yearly aggregations...")
     
     if not monthly_summaries:
         print("❌ No monthly summaries to process")
@@ -420,7 +420,7 @@ def backfill_yearly(monthly_summaries, force=False):
         )
         
         years_created += 1
-        print(f"✅ {year} ({year_summary['months_aggregated']} months) → s3://{S3_BUCKET_YEARLY}/{key}")
+        print(f"SUCCESS: {year} ({year_summary['months_aggregated']} months) -> s3://{S3_BUCKET_YEARLY}/{key}")
     
     if years_skipped > 0:
         print(f"⏭️  Skipped {years_skipped} incomplete year(s). Use --force to include them.")
@@ -524,11 +524,11 @@ Examples:
                         Body=json.dumps(month_summary, indent=2),
                         ContentType="application/json",
                     )
-                    print(f"✅ {year}-{month:02d} ({month_summary['days']} days) → s3://{S3_BUCKET_MONTHLY}/{key}")
+                    print(f"SUCCESS: {year}-{month:02d} ({month_summary['days']} days) -> s3://{S3_BUCKET_MONTHLY}/{key}")
             
-            print(f"\n🎉 Created {len(monthly_summaries)} monthly aggregations")
+            print(f"\nCreated {len(monthly_summaries)} monthly aggregations")
         else:
-            print("⚠️  No daily summaries found, skipping monthly aggregations")
+            print("WARNING: No daily summaries found, skipping monthly aggregations")
     
     # Yearly aggregations
     if args.yearly:
@@ -556,7 +556,7 @@ Examples:
                     except Exception as e:
                         print(f"⚠️  Skip {key}: {e}")
             
-            print(f"✅ Loaded {len(monthly_summaries)} monthly summaries")
+            print(f"Loaded {len(monthly_summaries)} monthly summaries")
         
         if monthly_summaries:
             backfill_yearly(monthly_summaries, force=args.force)
@@ -564,7 +564,7 @@ Examples:
             print("⚠️  No monthly summaries found, skipping yearly aggregations")
     
     print("\n" + "=" * 80)
-    print("  ✅ BACKFILL COMPLETE!")
+    print("  BACKFILL COMPLETE!")
     print("=" * 80)
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ def main():
         print("No records found."); return
     key = upload_summary(summary, target_dt)
     print(json.dumps({"uploaded": key, "records": summary["records"], "public_ips": summary.get("public_ips", []), "urls": len(summary.get("result_urls", []))}, indent=2))
-    print(f"✅ Uploaded to s3://{S3_BUCKET}/{key}")
+    print(f"Uploaded to s3://{S3_BUCKET}/{key}")
 
 if __name__ == "__main__":
     main()

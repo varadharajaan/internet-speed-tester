@@ -304,7 +304,7 @@ Resources:
       Handler: lambda_dashboard.lambda_handler
       CodeUri: ./
       Description: Flask dashboard for vd-speed-test
-      Timeout: 30
+      Timeout: 120
       MemorySize: 1024
       Environment:
         Variables:
@@ -599,7 +599,7 @@ Resources:
       MetricName: WeeklyAggregationFailures
       Namespace: vd-speed-test/Logs
       Statistic: Sum
-      Period: 604800
+      Period: 86400
       EvaluationPeriods: 1
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
@@ -614,7 +614,7 @@ Resources:
       MetricName: MonthlyAggregationFailures
       Namespace: vd-speed-test/Logs
       Statistic: Sum
-      Period: 2592000
+      Period: 86400
       EvaluationPeriods: 1
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold

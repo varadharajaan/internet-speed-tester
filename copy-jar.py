@@ -33,7 +33,7 @@ for folder in os.listdir(base_path):
                 with open(file_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
             except FileNotFoundError:
-                print(f"⚠️  File not found: {file_path}")
+                print(f"WARNING: File not found: {file_path}")
                 continue
 
             found = False
@@ -41,14 +41,14 @@ for folder in os.listdir(base_path):
                 if "sniarbtej.jar" in line:
                     lines[i] = agent_line + "\n"
                     found = True
-                    print(f"  → Replaced existing agent line")
+                    print(f"  - Replaced existing agent line")
                     break
 
             if not found:
                 lines.append(agent_line + "\n")
-                print(f"  → Appended new agent line")
+                print(f"  - Appended new agent line")
 
             with open(file_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
 
-            print(f"✅ Updated {file_path}\n")
+            print(f"Updated {file_path}\n")

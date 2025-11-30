@@ -572,19 +572,21 @@ def aggregate_hourly():
 @log_execution
 def aggregate_weekly():
     """
-    Aggregate all available daily summaries for the current or last completed week (Mon–Sun).
+    Aggregate the last COMPLETED week (Mon-Sun). 
+    Always aggregates the previous week to ensure all 7 days of data are available.
     """
     today_ist = datetime.datetime.now(TIMEZONE).date()
-    this_monday = today_ist - datetime.timedelta(days=today_ist.weekday())  # Monday of this week
+    
+    # Always go back to the previous completed week
+    # Find Monday of current week, then go back 7 days to get previous Monday
+    current_week_monday = today_ist - datetime.timedelta(days=today_ist.weekday())
+    this_monday = current_week_monday - datetime.timedelta(days=7)
     this_sunday = this_monday + datetime.timedelta(days=6)
 
-    # Optionally, if today is Monday, fallback to the previous week
-    if today_ist == this_monday:
-        last_monday = this_monday - datetime.timedelta(days=7)
-        this_sunday = last_monday + datetime.timedelta(days=6)
-        this_monday = last_monday
-
+    log.info(f"Aggregating weekly data for {this_monday} to {this_sunday} (previous completed week)")
+    
     daily_summaries = []
+    missing_days = []
     d = this_monday
     while d <= this_sunday:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
@@ -592,15 +594,25 @@ def aggregate_weekly():
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             daily_summaries.append(json.loads(obj["Body"].read()))
+            log.info(f"Loaded daily summary for {dd}")
         except s3.exceptions.NoSuchKey:
-            log.warning(f"Missing daily summary for {dd}")
+            log.warning(f"Missing daily summary for {dd} (key: {key})")
+            missing_days.append(dd)
         except Exception as e:
-            log.warning(f"Error reading {key}: {e}")
+            log.error(f"Error reading {key}: {e}")
+            missing_days.append(dd)
         d += datetime.timedelta(days=1)
 
+    log.info(f"Weekly aggregation: Found {len(daily_summaries)}/7 daily summaries, missing {len(missing_days)} days: {missing_days}")
+    
     if not daily_summaries:
         log.error(f"Weekly aggregation failed: No daily summaries found for week {this_monday} to {this_sunday}")
         return None
+    
+    if len(daily_summaries) < 3:
+        log.warning(f"Weekly aggregation: Only {len(daily_summaries)} days available, but proceeding with partial data")
+    
+    log.info(f"Proceeding with weekly aggregation using {len(daily_summaries)} daily summaries")
 
     # Collect all unique connection types from the week
     all_connection_types = set()
@@ -622,6 +634,9 @@ def aggregate_weekly():
 
     week_label = f"{this_monday.strftime('%YW%W')}"
     key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
+    
+    log.info(f"Uploading weekly summary to {key} (avg_download: {summary['avg_download']} Mbps)")
+    
     s3.put_object(
         Bucket=S3_BUCKET_WEEKLY,
         Key=key,
@@ -642,7 +657,10 @@ def aggregate_monthly():
     last_day = today  # up to today (or first_day + last_day_num for full month)
     month_tag = today.strftime("%Y%m")
 
+    log.info(f"Aggregating monthly data for {month_tag} ({first_day} to {last_day})")
+    
     summaries = []
+    missing_days = []
     d = first_day
     while d <= last_day:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
@@ -650,13 +668,24 @@ def aggregate_monthly():
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
-        except Exception:
-            pass
+        except s3.exceptions.NoSuchKey:
+            log.warning(f"Missing daily summary for {dd}")
+            missing_days.append(dd)
+        except Exception as e:
+            log.error(f"Error reading {key}: {e}")
+            missing_days.append(dd)
         d += datetime.timedelta(days=1)
 
+    log.info(f"Monthly aggregation: Found {len(summaries)} daily summaries, missing {len(missing_days)} days")
+    
     if not summaries:
         log.error(f"Monthly aggregation failed: No daily summaries found for month {month_tag}")
         return None
+    
+    if len(missing_days) > len(summaries):
+        log.warning(f"Monthly aggregation: More days missing ({len(missing_days)}) than available ({len(summaries)}), but proceeding")
+    
+    log.info(f"Proceeding with monthly aggregation using {len(summaries)} daily summaries")
 
     # Collect all unique connection types from the month
     all_connection_types = set()
@@ -676,6 +705,9 @@ def aggregate_monthly():
     }
 
     key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
+    
+    log.info(f"Uploading monthly summary to {key} (avg_download: {summary['avg_download']} Mbps, days: {summary['days']})")
+    
     s3.put_object(
         Bucket=S3_BUCKET_MONTHLY,
         Key=key,
@@ -743,7 +775,7 @@ def aggregate_yearly():
 # ---------------------------------------------------------------------------
 def lambda_handler(event, context):
     mode = (event or {}).get("mode") if isinstance(event, dict) else None
-    log.info(f"Lambda trigger — mode={mode or 'daily'}")
+    log.info(f"Lambda trigger - mode={mode or 'daily'}")
     try:
         if mode == "hourly":
             result = aggregate_hourly()
