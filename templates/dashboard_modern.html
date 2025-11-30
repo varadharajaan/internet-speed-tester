@@ -484,10 +484,10 @@
                         <div class="mt-3">
                             <div class="w-full bg-gray-200 rounded-full h-2">
                                 <div class="{% if stats_data.below_pct > 50 %}bg-red-500{% elif stats_data.below_pct > 25 %}bg-yellow-500{% else %}bg-green-500{% endif %} h-2 rounded-full smooth-transition" 
-                                     style="width: {{ 100 - stats_data.below_pct }}%"></div>
+                                     style="width: {{ (100 - stats_data.below_pct)|round(1) }}%"></div>
                             </div>
                             <p class="text-xs text-gray-500 mt-1 text-center">
-                                {{ 100 - stats_data.below_pct|round(1) }}% meeting threshold
+                                {{ (100 - stats_data.below_pct)|round(1) }}% meeting threshold
                             </p>
                         </div>
                     </div>
