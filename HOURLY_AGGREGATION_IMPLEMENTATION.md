@@ -141,20 +141,20 @@ Minute-Level (15-min intervals)
 - **Lambda Event**: `{"mode": "hourly"}`
 
 ### Daily Aggregation
-- **Frequency**: Daily at 00:30 UTC
-- **EventBridge Cron**: `cron(30 0 * * ? *)`
+- **Frequency**: Daily at 01:00 UTC
+- **EventBridge Cron**: `cron(0 1 * * ? *)`
 - **Purpose**: Aggregate previous day's 96 records
 - **Lambda Event**: `{"mode": "daily"}` (default)
 
 ### Weekly Aggregation
-- **Frequency**: Weekly on Monday at 20:30 UTC
-- **EventBridge Cron**: `cron(30 20 ? * MON *)`
+- **Frequency**: Weekly on Monday at 01:00 UTC
+- **EventBridge Cron**: `cron(0 1 ? * MON *)`
 - **Purpose**: Aggregate previous week's 7 daily summaries
 - **Lambda Event**: `{"mode": "weekly"}`
 
 ### Monthly Aggregation
-- **Frequency**: Last day of month at 20:30 UTC
-- **EventBridge Cron**: `cron(30 20 L * ? *)`
+- **Frequency**: 1st of month at 01:00 UTC
+- **EventBridge Cron**: `cron(0 1 1 * ? *)`
 - **Purpose**: Aggregate month's daily summaries
 - **Lambda Event**: `{"mode": "monthly"}`
 

@@ -251,10 +251,10 @@ Your aggregations run automatically via EventBridge:
 | Aggregation | Schedule | Time (IST) | Description |
 |-------------|----------|------------|-------------|
 | **Hourly** | Every hour at :10 | XX:10 IST | Aggregates last hour's 15-min data |
-| **Daily** | Daily at 00:30 UTC | 06:00 IST | Aggregates yesterday's minute-level data |
-| **Weekly** | Monday at 20:30 UTC | Tuesday 02:00 IST | Aggregates last Mon-Sun week |
-| **Monthly** | Last day at 20:30 UTC | 1st 02:00 IST | Aggregates last month |
-| **Yearly** | Dec 31 at 20:30 UTC | Jan 1 02:00 IST | Aggregates last year |
+| **Daily** | Daily at 01:00 UTC | 06:30 IST | Aggregates yesterday's minute-level data |
+| **Weekly** | Monday at 01:00 UTC | 06:30 IST | Aggregates last Mon-Sun week |
+| **Monthly** | 1st at 01:00 UTC | 1st 06:30 IST | Aggregates previous month |
+| **Yearly** | Jan 1 at 01:00 UTC | 06:30 IST | Aggregates last year |
 
 ## Data Retention Policies
 

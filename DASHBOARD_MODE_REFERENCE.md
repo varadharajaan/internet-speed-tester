@@ -22,13 +22,13 @@ Trigger different aggregations:
 # Daily (default, daily at 00:30 UTC)
 {"mode": "daily"} or {}
 
-# Weekly (Mondays at 20:30 UTC)
+# Weekly (Monday at 01:00 UTC)
 {"mode": "weekly"}
 
-# Monthly (last day of month at 20:30 UTC)
+# Monthly (1st of month at 01:00 UTC)
 {"mode": "monthly"}
 
-# Yearly (Dec 31 at 20:30 UTC)
+# Yearly (Jan 1 at 01:00 UTC)
 {"mode": "yearly"}
 ```
 
@@ -95,16 +95,16 @@ http://localhost:8080/?mode=daily&days=30&threshold=150
 cron(5 * * * ? *)          # Every hour at :05
 
 # Daily aggregation
-cron(30 0 * * ? *)         # Daily at 00:30 UTC
+cron(0 1 * * ? *)          # Daily at 01:00 UTC
 
 # Weekly aggregation
-cron(30 20 ? * MON *)      # Mondays at 20:30 UTC
+cron(0 1 ? * MON *)        # Mondays at 01:00 UTC
 
 # Monthly aggregation
-cron(30 20 L * ? *)        # Last day of month at 20:30 UTC
+cron(0 1 1 * ? *)          # 1st of month at 01:00 UTC
 
 # Yearly aggregation
-cron(30 20 31 12 ? *)      # Dec 31 at 20:30 UTC
+cron(0 1 1 1 ? *)          # Jan 1 at 01:00 UTC
 ```
 
 ## 🎯 Use Cases

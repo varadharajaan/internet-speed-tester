@@ -26,20 +26,20 @@ Parameters:
     Description: Cron for hourly aggregation (every hour at :10)
   DailyScheduleExpression:
     Type: String
-    Default: cron(30 0 * * ? *)           # 00:30 UTC = 06:00 IST daily
-    Description: Cron for daily aggregation (00:30 UTC)
+    Default: cron(0 1 * * ? *)            # 01:00 UTC = 06:30 IST daily
+    Description: Cron for daily aggregation (01:00 UTC)
   WeeklyScheduleExpression:
     Type: String
-    Default: cron(30 20 ? * MON *)        # Mon 20:30 UTC = Tue 02:00 IST (last completed Mon–Sun)
-    Description: Cron for weekly aggregation (Tue 02:00 IST)
+    Default: cron(0 1 ? * MON *)          # Mon 01:00 UTC = 06:30 IST (after Sun daily completes)
+    Description: Cron for weekly aggregation (Mon 06:30 IST)
   MonthlyScheduleExpression:
     Type: String
-    Default: cron(30 20 L * ? *)          # Last day 20:30 UTC = 1st 02:00 IST
-    Description: Cron for monthly aggregation (1st 02:00 IST)
+    Default: cron(0 1 1 * ? *)            # 1st day 01:00 UTC = 06:30 IST (after daily runs)
+    Description: Cron for monthly aggregation (1st 06:30 IST)
   YearlyScheduleExpression:
     Type: String
-    Default: cron(30 20 31 12 ? *)        # Dec 31 20:30 UTC = Jan 1 02:00 IST
-    Description: Cron for yearly aggregation (Jan 1 02:00 IST)
+    Default: cron(0 1 1 1 ? *)            # Jan 1 01:00 UTC = 06:30 IST (after Dec 31 daily)
+    Description: Cron for yearly aggregation (Jan 1 06:30 IST)
 
   ExpectedSpeedMbps:
     Type: Number

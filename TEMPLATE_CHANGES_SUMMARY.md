@@ -157,10 +157,10 @@ if count < expected_records:
 | Aggregation | Frequency | Cron Expression | UTC Time | IST Time | Input |
 |-------------|-----------|-----------------|----------|----------|-------|
 | **Hourly** | Every hour | `cron(10 * * * ? *)` | Every :10 | Every :40 | `{"mode":"hourly"}` |
-| **Daily** | Daily | `cron(30 0 * * ? *)` | 00:30 | 06:00 | `{"mode":"daily"}` |
-| **Weekly** | Weekly | `cron(30 20 ? * MON *)` | Mon 20:30 | Tue 02:00 | `{"mode":"weekly"}` |
-| **Monthly** | Monthly | `cron(30 20 L * ? *)` | Last day 20:30 | 1st 02:00 | `{"mode":"monthly"}` |
-| **Yearly** | Yearly | `cron(30 20 31 12 ? *)` | Dec 31 20:30 | Jan 1 02:00 | `{"mode":"yearly"}` |
+| **Daily** | Daily | `cron(0 1 * * ? *)` | Daily 01:00 | 06:30 | `{"mode":"daily"}` |
+| **Weekly** | Weekly | `cron(0 1 ? * MON *)` | Mon 01:00 | 06:30 | `{"mode":"weekly"}` |
+| **Monthly** | Monthly | `cron(0 1 1 * ? *)` | 1st 01:00 | 1st 06:30 | `{"mode":"monthly"}` |
+| **Yearly** | Yearly | `cron(0 1 1 1 ? *)` | Jan 1 01:00 | 06:30 | `{"mode":"yearly"}` |
 
 ---
 

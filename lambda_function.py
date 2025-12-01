@@ -632,7 +632,9 @@ def aggregate_weekly():
         "connection_types": unique_connection_types,
     }
 
-    week_label = f"{this_monday.strftime('%YW%W')}"
+    # Use ISO week number (Monday-based, 1-53)
+    iso_year, iso_week, _ = this_monday.isocalendar()
+    week_label = f"{iso_year}W{iso_week:02d}"
     key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
     
     log.info(f"Uploading weekly summary to {key} (avg_download: {summary['avg_download']} Mbps)")
@@ -650,14 +652,16 @@ def aggregate_weekly():
 # --- Monthly rollup (previous calendar month) ---------------------------------
 @log_execution
 def aggregate_monthly():
-    """Aggregate all daily summaries for the current month so far."""
+    """Aggregate all daily summaries for the current month up to yesterday (last completed day)."""
     today = datetime.datetime.now(TIMEZONE).date()
-    first_day = today.replace(day=1)
-    _, last_day_num = monthrange(today.year, today.month)
-    last_day = today  # up to today (or first_day + last_day_num for full month)
-    month_tag = today.strftime("%Y%m")
+    yesterday = today - datetime.timedelta(days=1)
+    
+    # Aggregate the month that just completed (yesterday's month)
+    first_day = yesterday.replace(day=1)
+    last_day = yesterday
+    month_tag = first_day.strftime("%Y%m")
 
-    log.info(f"Aggregating monthly data for {month_tag} ({first_day} to {last_day})")
+    log.info(f"Aggregating monthly data for {month_tag} ({first_day} to {last_day}) - up to yesterday")
     
     summaries = []
     missing_days = []
