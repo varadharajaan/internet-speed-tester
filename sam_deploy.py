@@ -50,22 +50,22 @@ def print_banner(text: str):
 
 def print_step(step: str, description: str):
     """Print a step indicator."""
-    print(f"{Colors.YELLOW}▶ [{step}]{Colors.RESET} {description}")
+    print(f"{Colors.YELLOW}> [{step}]{Colors.RESET} {description}")
 
 
 def print_success(message: str):
     """Print success message."""
-    print(f"{Colors.GREEN}✅ {message}{Colors.RESET}")
+    print(f"{Colors.GREEN}[OK] {message}{Colors.RESET}")
 
 
 def print_error(message: str):
     """Print error message."""
-    print(f"{Colors.RED}❌ {message}{Colors.RESET}")
+    print(f"{Colors.RED}[ERROR] {message}{Colors.RESET}")
 
 
 def print_info(message: str):
     """Print info message."""
-    print(f"{Colors.BLUE}ℹ️  {message}{Colors.RESET}")
+    print(f"{Colors.BLUE}[INFO] {message}{Colors.RESET}")
 
 
 def run_command(cmd: list, description: str) -> bool:

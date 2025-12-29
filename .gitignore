@@ -9,3 +9,4 @@ __pypackages__/
 *.log
 *.exe.vmoptions
 .conda/*
+stack-outputs.txt
