@@ -17,43 +17,137 @@ import time
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- In-Memory Cache with TTL ---------------------------------------------------
+# --- In-Memory Cache with TTL and Disk Persistence ------------------------------
+import pickle
+import hashlib
+
+CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
+
 class DataCache:
-    """Simple in-memory cache with TTL support and manual invalidation."""
-    def __init__(self, default_ttl=120):  # 2 minutes default
-        self._cache = {}
+    """In-memory cache with TTL support, manual invalidation, and disk persistence."""
+    def __init__(self, default_ttl=120, persist_dir=CACHE_DIR):
+        self._cache = {}  # {key: (data, expiry, source)} where source = 'disk' or 'memory'
         self._lock = Lock()
         self.default_ttl = default_ttl
+        self.persist_dir = persist_dir
+        self._disk_loaded_keys = set()  # Track which keys were loaded from disk
+        
+        # Create cache directory if it doesn't exist
+        if self.persist_dir:
+            os.makedirs(self.persist_dir, exist_ok=True)
+            self._load_persisted_cache()
     
-    def get(self, key):
-        """Get cached value if not expired."""
+    def _get_cache_file(self, key):
+        """Get the file path for a cache key."""
+        # Use hash to create safe filenames
+        safe_key = hashlib.md5(key.encode()).hexdigest()
+        return os.path.join(self.persist_dir, f"{safe_key}.pkl")
+    
+    def _load_persisted_cache(self):
+        """Load persisted cache entries on startup."""
+        if not self.persist_dir or not os.path.exists(self.persist_dir):
+            return
+        
+        loaded = 0
+        expired = 0
+        for filename in os.listdir(self.persist_dir):
+            if filename.endswith('.pkl'):
+                filepath = os.path.join(self.persist_dir, filename)
+                try:
+                    with open(filepath, 'rb') as f:
+                        cache_entry = pickle.load(f)
+                    key = cache_entry.get('key')
+                    data = cache_entry.get('data')
+                    expiry = cache_entry.get('expiry', 0)
+                    
+                    if key and time.time() < expiry:
+                        self._cache[key] = (data, expiry)
+                        self._disk_loaded_keys.add(key)
+                        loaded += 1
+                    else:
+                        # Expired, delete the file
+                        os.remove(filepath)
+                        expired += 1
+                except Exception:
+                    # Corrupted file, remove it
+                    try:
+                        os.remove(filepath)
+                    except:
+                        pass
+        
+        if loaded > 0 or expired > 0:
+            print(f"[CACHE STARTUP] Restored {loaded} entries from disk" + (f", purged {expired} expired" if expired else ""))
+    
+    def get(self, key, return_source=False):
+        """Get cached value if not expired. If return_source=True, returns (data, source)."""
         with self._lock:
             if key in self._cache:
                 data, expiry = self._cache[key]
                 if time.time() < expiry:
+                    source = 'disk' if key in self._disk_loaded_keys else 'memory'
+                    if return_source:
+                        return data, source
                     return data
                 del self._cache[key]
-        return None
+                self._disk_loaded_keys.discard(key)
+                # Also remove from disk
+                self._delete_from_disk(key)
+        return (None, None) if return_source else None
     
-    def set(self, key, value, ttl=None):
-        """Cache a value with TTL."""
+    def set(self, key, value, ttl=None, persist=True):
+        """Cache a value with TTL. persist=True saves to disk for long-TTL items."""
         ttl = ttl or self.default_ttl
+        expiry = time.time() + ttl
         with self._lock:
-            self._cache[key] = (value, time.time() + ttl)
+            self._cache[key] = (value, expiry)
+        
+        # Persist to disk only for longer-lived cache entries (TTL > 5 min)
+        if persist and self.persist_dir and ttl >= 300:
+            self._save_to_disk(key, value, expiry)
+    
+    def _save_to_disk(self, key, data, expiry):
+        """Save cache entry to disk."""
+        try:
+            filepath = self._get_cache_file(key)
+            with open(filepath, 'wb') as f:
+                pickle.dump({'key': key, 'data': data, 'expiry': expiry}, f)
+        except Exception:
+            pass  # Disk save failure is not critical
+    
+    def _delete_from_disk(self, key):
+        """Delete cache entry from disk."""
+        try:
+            filepath = self._get_cache_file(key)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        except Exception:
+            pass
     
     def invalidate(self, key=None):
         """Invalidate specific key or all keys."""
         with self._lock:
             if key:
                 self._cache.pop(key, None)
+                self._delete_from_disk(key)
             else:
                 self._cache.clear()
+                # Clear all persisted cache files
+                if self.persist_dir and os.path.exists(self.persist_dir):
+                    for f in os.listdir(self.persist_dir):
+                        if f.endswith('.pkl'):
+                            try:
+                                os.remove(os.path.join(self.persist_dir, f))
+                            except:
+                                pass
     
     def get_stats(self):
         """Get cache statistics."""
         with self._lock:
             valid_count = sum(1 for _, (_, exp) in self._cache.items() if time.time() < exp)
-            return {"cached_items": valid_count, "total_keys": len(self._cache)}
+            disk_count = 0
+            if self.persist_dir and os.path.exists(self.persist_dir):
+                disk_count = len([f for f in os.listdir(self.persist_dir) if f.endswith('.pkl')])
+            return {"cached_items": valid_count, "total_keys": len(self._cache), "disk_files": disk_count}
 
 # Global cache instance (2 minute TTL - balances freshness vs performance)
 data_cache = DataCache(default_ttl=120)
@@ -389,9 +483,9 @@ def load_summaries(host_id=None):
             log.warning(f"Failed to fetch {key}: {e}")
             return None
     
-    # Parallel fetch with up to 50 threads (optimized for S3 connection pool)
+    # Parallel fetch with up to 20 threads (reduced to avoid connection drops)
     recs = []
-    with ThreadPoolExecutor(max_workers=50) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(fetch_one, key): key for key in keys}
         for future in as_completed(futures):
             result = future.result()
@@ -446,12 +540,16 @@ def load_minute_data(days, host_id=None, force_reload=False):
     recent_cutoff = now - datetime.timedelta(minutes=15)  # Data older than 15 min is "past"
     paginator = s3.get_paginator("list_objects_v2")
     
-    # Determine prefix based on host
-    host_key = host_id if host_id and host_id != "all" else "_all"
-    if host_id and host_id != "all" and host_id != "_legacy":
-        base_prefix = f"host={host_id}/"
+    # Determine which hosts to query
+    if host_id and host_id != "all":
+        # Single host mode
+        hosts_to_query = [host_id]
+        host_key = host_id
     else:
-        base_prefix = ""
+        # All hosts mode - query all discovered hosts
+        discovered_hosts = list_hosts()
+        hosts_to_query = discovered_hosts if discovered_hosts else ["_legacy"]
+        host_key = "_all"
     
     # Force reload: clear all minute caches for this host
     if force_reload:
@@ -491,15 +589,22 @@ def load_minute_data(days, host_id=None, force_reload=False):
             log.warning(f"Skip {key}: {e}")
             return None
     
-    def fetch_day_data(date_obj, only_recent=False):
-        """Fetch minute data for a specific date.
+    def fetch_day_data(date_obj, host_to_query, only_recent=False):
+        """Fetch minute data for a specific date from a specific host.
         
         only_recent=True: only fetch files from last 15 minutes (for today's fresh data)
         """
+        # Build the S3 prefix based on host
+        if host_to_query == "_legacy":
+            base_prefix = ""  # Legacy data is at root level
+        else:
+            base_prefix = f"host={host_to_query}/"
+        
         year = date_obj.year
-        month = f"{date_obj.month:02d}"
-        day = f"{date_obj.day:02d}"
-        prefix = f"{base_prefix}year={year}/month={month}/day={day}/"
+        # S3 path uses YYYYMM and YYYYMMDD format
+        month_str = date_obj.strftime("%Y%m")  # e.g., "202512"
+        day_str = date_obj.strftime("%Y%m%d")  # e.g., "20251229"
+        prefix = f"{base_prefix}year={year}/month={month_str}/day={day_str}/"
         
         keys = []
         try:
@@ -520,9 +625,9 @@ def load_minute_data(days, host_id=None, force_reload=False):
         if not keys:
             return []
         
-        # Parallel fetch for this day
+        # Parallel fetch for this day (reduced workers to avoid connection drops)
         results = []
-        with ThreadPoolExecutor(max_workers=50) as executor:
+        with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(fetch_and_parse, key) for key in keys]
             for future in as_completed(futures):
                 result = future.result()
@@ -540,29 +645,33 @@ def load_minute_data(days, host_id=None, force_reload=False):
         
         if current_date < today:
             # Historical day - cache for 1 hour (data is fixed)
-            cached = data_cache.get(cache_key)
+            cached, source = data_cache.get(cache_key, return_source=True)
             if cached is not None:
-                log.info(f"[CACHE HIT] {date_str}: {len(cached)} records")
+                log.info(f"[CACHE HIT] {date_str}: {len(cached)} records (from {source})")
                 all_results.extend(cached)
             else:
-                log.info(f"[FETCHING] {date_str}...")
-                day_results = fetch_day_data(current_date)
+                log.info(f"[S3 FETCH] {date_str} from {len(hosts_to_query)} hosts...")
+                day_results = []
+                for h in hosts_to_query:
+                    day_results.extend(fetch_day_data(current_date, h))
                 data_cache.set(cache_key, day_results, ttl=3600)  # 1 hour
-                log.info(f"[CACHED] {date_str}: {len(day_results)} records (TTL=1h)")
+                log.info(f"[S3 DONE] {date_str}: {len(day_results)} records → cached (TTL=1h)")
                 all_results.extend(day_results)
         else:
             # Today - split into "past" (>15 min old) and "recent" (<15 min old)
             past_cache_key = f"{cache_key}_past"
             
             # Get cached "past" data (data older than 15 min)
-            cached_past = data_cache.get(past_cache_key)
+            cached_past, source = data_cache.get(past_cache_key, return_source=True)
             if cached_past is not None:
-                log.info(f"[CACHE HIT] Today's past data: {len(cached_past)} records")
+                log.info(f"[CACHE HIT] Today's past: {len(cached_past)} records (from {source})")
                 all_results.extend(cached_past)
             else:
                 # Fetch all of today's data, split into past and recent
-                log.info(f"[FETCHING] Today's data...")
-                all_today = fetch_day_data(current_date)
+                log.info(f"[S3 FETCH] Today's data from {len(hosts_to_query)} hosts...")
+                all_today = []
+                for h in hosts_to_query:
+                    all_today.extend(fetch_day_data(current_date, h))
                 
                 # Split into past (>15 min) and recent (<15 min)
                 past_data = [r for r in all_today if r["timestamp"] < recent_cutoff]
@@ -571,11 +680,11 @@ def load_minute_data(days, host_id=None, force_reload=False):
                 # Cache past data for 15 minutes
                 if past_data:
                     data_cache.set(past_cache_key, past_data, ttl=900)  # 15 min
-                    log.info(f"[CACHED] Today's past: {len(past_data)} records (TTL=15m)")
+                    log.info(f"[S3 DONE] Today's past: {len(past_data)} records → cached (TTL=15m)")
                 
                 all_results.extend(past_data)
                 all_results.extend(recent_data)
-                log.info(f"[FETCHED] Today: {len(past_data)} past + {len(recent_data)} recent")
+                log.info(f"[S3 DONE] Today: {len(past_data)} past + {len(recent_data)} recent (fresh)")
         
         current_date += datetime.timedelta(days=1)
     
@@ -651,9 +760,9 @@ def load_hourly_data(days, host_id=None):
             log.warning(f"Skip {key}: {e}")
             return None
     
-    # Parallel fetch with up to 30 threads
+    # Parallel fetch with up to 20 threads (reduced to avoid connection drops)
     results = []
-    with ThreadPoolExecutor(max_workers=30) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(fetch_and_parse, key): key for key in keys_to_fetch}
         for future in as_completed(futures):
             result = future.result()
@@ -1021,7 +1130,7 @@ def dashboard():
     # Check cache first
     cached_df = data_cache.get(cache_key)
     if cached_df is not None:
-        log.info(f"Cache HIT for {cache_key}")
+        log.info(f"Cache HIT (memory) for {cache_key}")
         df = cached_df
     else:
         log.info(f"Cache MISS for {cache_key} - loading from S3")
@@ -1331,11 +1440,18 @@ def dashboard():
         "connection_types": df["connection_type"].fillna("Unknown").tolist() if not df.empty and "connection_type" in df.columns else []
     }
     
-    # Downsample chart data if too many points (keeps max 500 points using LTTB algorithm)
-    # This preserves visual shape while improving chart performance
-    if len(chart_data.get("timestamps", [])) > 500:
+    # Downsample chart data if too many points
+    # Use mode-appropriate limits: minute data needs more aggressive downsampling
+    if mode == "minute":
+        max_chart_points = 200  # More aggressive for minute data
+    elif mode == "hourly":
+        max_chart_points = 300
+    else:
+        max_chart_points = 500  # Daily/weekly/monthly can have more points
+    
+    if len(chart_data.get("timestamps", [])) > max_chart_points:
         original_count = len(chart_data["timestamps"])
-        chart_data = downsample_chart_data(chart_data, max_points=500)
+        chart_data = downsample_chart_data(chart_data, max_points=max_chart_points)
         log.info(f"Chart data downsampled: {original_count} -> {len(chart_data['timestamps'])} points")
     
     # Stats summary with total_tests
@@ -1428,7 +1544,7 @@ def api_data():
     # Check cache
     cached_df = data_cache.get(cache_key)
     if cached_df is not None:
-        log.info(f"API cache HIT for {cache_key}")
+        log.info(f"API cache HIT (memory) for {cache_key}")
         df = cached_df
     else:
         log.info(f"API cache MISS for {cache_key}")
@@ -1488,7 +1604,7 @@ def api_dashboard():
     # Check cache for pre-computed dashboard response
     cached_response = data_cache.get(cache_key)
     if cached_response is not None:
-        log.info(f"Dashboard API cache HIT for {cache_key}")
+        log.info(f"Dashboard API cache HIT (memory) for {cache_key}")
         return jsonify(cached_response)
     
     log.info(f"Dashboard API cache MISS for {cache_key} - computing...")

@@ -10,3 +10,9 @@ __pypackages__/
 *.exe.vmoptions
 .conda/*
 stack-outputs.txt
+.cache/*
+.DS_Store
+.idea/
+.mypy_cache/
+.pytest_cache/
+

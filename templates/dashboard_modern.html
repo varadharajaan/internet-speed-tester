@@ -1525,8 +1525,23 @@
                         color: '#6b7280',
                         rotate: 45,
                         fontSize: 10,
-                        interval: 'auto',
+                        interval: function(index, value) {
+                            // Show ~15-20 labels max for readability
+                            const totalPoints = chartData.timestamps.length;
+                            const interval = Math.ceil(totalPoints / 15);
+                            return index % interval === 0;
+                        },
                         formatter: function(value) {
+                            // Shorten datetime format: "2025-12-29 14:30" -> "12/29 14:30"
+                            if (value && value.length > 10) {
+                                const parts = value.split(' ');
+                                const datePart = parts[0];
+                                const timePart = parts[1] || '';
+                                const dateMatch = datePart.match(/\d{4}-(\d{2})-(\d{2})/);
+                                if (dateMatch) {
+                                    return dateMatch[1] + '/' + dateMatch[2] + (timePart ? ' ' + timePart : '');
+                                }
+                            }
                             return value;
                         }
                     }
@@ -1800,7 +1815,23 @@
                         color: '#6b7280',
                         rotate: 45,
                         fontSize: 10,
-                        interval: 'auto'
+                        interval: function(index, value) {
+                            const totalPoints = chartData.timestamps.length;
+                            const interval = Math.ceil(totalPoints / 15);
+                            return index % interval === 0;
+                        },
+                        formatter: function(value) {
+                            if (value && value.length > 10) {
+                                const parts = value.split(' ');
+                                const datePart = parts[0];
+                                const timePart = parts[1] || '';
+                                const dateMatch = datePart.match(/\d{4}-(\d{2})-(\d{2})/);
+                                if (dateMatch) {
+                                    return dateMatch[1] + '/' + dateMatch[2] + (timePart ? ' ' + timePart : '');
+                                }
+                            }
+                            return value;
+                        }
                     }
                 },
                 yAxis: {
