@@ -1,26 +1,51 @@
-# Use the official AWS Lambda base image for Python 3.12
-FROM public.ecr.aws/lambda/python:3.12 AS base
+# =============================================================================
+# VD-SPEED-TEST Lambda Container Image (Multi-Handler, Optimized for Size)
+# =============================================================================
+# Supports all 3 Lambda handlers in a single image.
+# Set the handler at runtime via AWS_LAMBDA_FUNCTION_HANDLER env var or CMD override.
+#
+# Build:   docker build -t vd-speedtest-lambda .
+# Size:    ~150-180MB (optimized)
+#
+# Deploy examples:
+#   Dashboard:  docker run -e AWS_LAMBDA_FUNCTION_HANDLER=lambda_dashboard.lambda_handler ...
+#   Aggregator: docker run -e AWS_LAMBDA_FUNCTION_HANDLER=lambda_function.lambda_handler ...
+#   Checker:    docker run -e AWS_LAMBDA_FUNCTION_HANDLER=lambda_hourly_check.lambda_handler ...
+# =============================================================================
 
-# Copy the dependency list into the Lambda task root directory
-COPY requirements.txt ${LAMBDA_TASK_ROOT}
+FROM public.ecr.aws/lambda/python:3.12-minimal AS builder
 
-# Install Python dependencies without caching to keep the image small
-RUN pip install --no-cache-dir -r requirements.txt
+# Install build dependencies
+COPY requirements.txt /tmp/
+RUN pip install --no-cache-dir --target /opt/python -r /tmp/requirements.txt \
+    && find /opt/python -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true \
+    && find /opt/python -type f -name "*.pyc" -delete 2>/dev/null || true \
+    && find /opt/python -type f -name "*.pyo" -delete 2>/dev/null || true \
+    && find /opt/python -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
+    && find /opt/python -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
+    && rm -rf /opt/python/pip* /opt/python/setuptools* /opt/python/wheel* 2>/dev/null || true
 
-# Copy main application files (your Lambda code)
-COPY app.py lambda_dashboard.py ${LAMBDA_TASK_ROOT}/
+# =============================================================================
+# Final Stage - Minimal Runtime
+# =============================================================================
+FROM public.ecr.aws/lambda/python:3.12-minimal
 
-# Copy the 'templates' directory (for Flask/Jinja2 HTML templates, if applicable)
+# Copy optimized dependencies from builder
+COPY --from=builder /opt/python ${LAMBDA_TASK_ROOT}
+
+# Copy only essential application files (no .pyc, no tests)
+COPY app.py ${LAMBDA_TASK_ROOT}/
+COPY lambda_dashboard.py ${LAMBDA_TASK_ROOT}/
+COPY lambda_function.py ${LAMBDA_TASK_ROOT}/
+COPY lambda_hourly_check.py ${LAMBDA_TASK_ROOT}/
+COPY config.json ${LAMBDA_TASK_ROOT}/
 COPY templates/ ${LAMBDA_TASK_ROOT}/templates/
 
-# --- OPTIONAL STAGE: Handle config.json if present ---
-# This uses a multi-stage build pattern. The second stage 'final' inherits everything from 'base'.
-FROM base AS final
+# Clean up any bytecode
+RUN find ${LAMBDA_TASK_ROOT} -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-# Copy config.json into the Lambda root directory, but only if it exists in your context
-RUN if [ -f config.json ]; then cp config.json ${LAMBDA_TASK_ROOT}/; fi
-
-# Define the Lambda function handler (the entry point)
+# Default handler (Dashboard) - override at runtime for other handlers
+# AWS Lambda will use CMD as the handler, or you can override with:
+#   ImageConfig.Command in SAM/CloudFormation
+#   --entrypoint in docker run
 CMD ["lambda_dashboard.lambda_handler"]
-# Note: Change "lambda_dashboard.lambda_handler" to your actual handler if different
-# End of Dockerfile

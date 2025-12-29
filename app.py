@@ -21,7 +21,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pickle
 import hashlib
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
+# Use /tmp for Lambda (read-only filesystem), local .cache for development
+IS_LAMBDA = os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+CACHE_DIR = "/tmp/.cache" if IS_LAMBDA else os.path.join(os.path.dirname(__file__), ".cache")
 
 class DataCache:
     """In-memory cache with TTL support, manual invalidation, and disk persistence."""
