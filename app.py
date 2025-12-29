@@ -58,6 +58,130 @@ class DataCache:
 # Global cache instance (2 minute TTL - balances freshness vs performance)
 data_cache = DataCache(default_ttl=120)
 
+
+# --- Chart Data Downsampling (Smart Sampling) -----------------------------------
+def downsample_chart_data(chart_data: dict, max_points: int = 200) -> dict:
+    """
+    Smart downsampling that:
+    1. Removes consecutive near-duplicate values (within tolerance)
+    2. Applies LTTB (Largest Triangle Three Buckets) to preserve visual shape
+    
+    Args:
+        chart_data: Dict with timestamps, download, upload, ping, connection_types
+        max_points: Maximum number of points to keep (default 200)
+    
+    Returns:
+        Downsampled chart_data dict
+    """
+    timestamps = chart_data.get("timestamps", [])
+    download = chart_data.get("download", [])
+    upload = chart_data.get("upload", [])
+    ping = chart_data.get("ping", [])
+    connection_types = chart_data.get("connection_types", [])
+    
+    n = len(timestamps)
+    
+    # No downsampling needed if already under limit
+    if n <= max_points:
+        return chart_data
+    
+    # Step 1: Remove consecutive near-duplicates (keep significant changes only)
+    # A point is "significant" if it differs from the previous kept point by > tolerance%
+    def remove_near_duplicates(indices, values, tolerance_pct=5):
+        """Keep only points that show significant change from previous kept point."""
+        if len(indices) <= 2:
+            return indices
+        
+        kept = [indices[0]]  # Always keep first
+        last_kept_idx = indices[0]
+        last_kept_val = values[last_kept_idx] if last_kept_idx < len(values) else 0
+        
+        for i in range(1, len(indices) - 1):
+            idx = indices[i]
+            val = values[idx] if idx < len(values) else 0
+            
+            # Calculate percent change from last kept value
+            if last_kept_val != 0:
+                pct_change = abs(val - last_kept_val) / last_kept_val * 100
+            else:
+                pct_change = 100 if val != 0 else 0
+            
+            # Keep if significant change OR if we've skipped too many points
+            points_since_last = idx - last_kept_idx
+            if pct_change > tolerance_pct or points_since_last > 20:
+                kept.append(idx)
+                last_kept_idx = idx
+                last_kept_val = val
+        
+        kept.append(indices[-1])  # Always keep last
+        return kept
+    
+    # Step 2: LTTB algorithm for remaining points
+    def lttb_indices(values, target_points):
+        """Get indices to keep using LTTB algorithm."""
+        n = len(values)
+        if n <= target_points:
+            return list(range(n))
+        
+        bucket_size = (n - 2) / (target_points - 2)
+        indices = [0]
+        a = 0
+        
+        for i in range(target_points - 2):
+            bucket_start = int((i + 1) * bucket_size) + 1
+            bucket_end = min(int((i + 2) * bucket_size) + 1, n - 1)
+            
+            next_bucket_start = bucket_end
+            next_bucket_end = min(int((i + 3) * bucket_size) + 1, n)
+            
+            if next_bucket_start < next_bucket_end:
+                avg_y = sum(values[next_bucket_start:next_bucket_end]) / (next_bucket_end - next_bucket_start)
+            else:
+                avg_y = values[next_bucket_start] if next_bucket_start < n else 0
+            
+            max_area = -1
+            max_idx = bucket_start
+            
+            for j in range(bucket_start, bucket_end):
+                # Simplified triangle area using just y-values difference
+                area = abs((values[j] - values[a]) + (values[j] - avg_y))
+                if area > max_area:
+                    max_area = area
+                    max_idx = j
+            
+            indices.append(max_idx)
+            a = max_idx
+        
+        indices.append(n - 1)
+        return indices
+    
+    # Apply LTTB first to get candidate indices
+    intermediate_points = min(max_points * 3, n)  # Get 3x target initially
+    candidate_indices = lttb_indices(download, intermediate_points)
+    
+    # Apply near-duplicate removal
+    final_indices = remove_near_duplicates(candidate_indices, download, tolerance_pct=3)
+    
+    # If still too many, apply LTTB again on the filtered data
+    if len(final_indices) > max_points:
+        # Re-map to final selection
+        filtered_download = [download[i] for i in final_indices]
+        second_pass = lttb_indices(filtered_download, max_points)
+        final_indices = [final_indices[i] for i in second_pass]
+    
+    # Build result
+    return {
+        "timestamps": [timestamps[i] for i in final_indices],
+        "download": [download[i] for i in final_indices],
+        "upload": [upload[i] for i in final_indices] if upload else [],
+        "ping": [ping[i] for i in final_indices] if ping else [],
+        "connection_types": [connection_types[i] for i in final_indices] if connection_types else [],
+        "downsampled": True,
+        "original_count": n,
+        "sampled_count": len(final_indices)
+    }
+
+
 # --- Configuration from config.json --------------------------------------------
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
 DEFAULT_CONFIG = {
@@ -308,26 +432,37 @@ def load_summaries(host_id=None):
     return df.sort_values("date_ist")
 
 @log_execution
-def load_minute_data(days, host_id=None):
-    """Load minute-level data using parallel S3 fetches for speed."""
-    cutoff = datetime.datetime.now(TIMEZONE) - datetime.timedelta(days=days)
+def load_minute_data(days, host_id=None, force_reload=False):
+    """Load minute-level data with smart caching.
+    
+    - Historical days (before today): cached for 1 hour
+    - Today's data older than 15 min: cached for 15 minutes (won't change)
+    - Today's data from last 15 min: fetched fresh
+    - force_reload=True: clears all caches and fetches everything fresh
+    """
+    now = datetime.datetime.now(TIMEZONE)
+    today = now.date()
+    cutoff = now - datetime.timedelta(days=days)
+    recent_cutoff = now - datetime.timedelta(minutes=15)  # Data older than 15 min is "past"
     paginator = s3.get_paginator("list_objects_v2")
     
     # Determine prefix based on host
+    host_key = host_id if host_id and host_id != "all" else "_all"
     if host_id and host_id != "all" and host_id != "_legacy":
-        base_prefix = f"host={host_id}/year="
+        base_prefix = f"host={host_id}/"
     else:
-        base_prefix = "year="
+        base_prefix = ""
     
-    # First, collect all keys that match our criteria
-    keys_to_fetch = []
-    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=base_prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(".json") and "aggregated" not in key:
-                keys_to_fetch.append(key)
-    
-    log.info(f"Found {len(keys_to_fetch)} minute-level files to fetch")
+    # Force reload: clear all minute caches for this host
+    if force_reload:
+        log.info(f"[FORCE RELOAD] Clearing all minute caches for host={host_key}")
+        # Clear day-level caches
+        current_date = cutoff.date()
+        while current_date <= today:
+            date_str = current_date.strftime("%Y-%m-%d")
+            data_cache.invalidate(f"minute_day_{date_str}_{host_key}")
+            data_cache.invalidate(f"minute_day_{date_str}_{host_key}_past")
+            current_date += datetime.timedelta(days=1)
     
     def fetch_and_parse(key):
         """Fetch and parse a single S3 object."""
@@ -337,8 +472,6 @@ def load_minute_data(days, host_id=None):
             if not ts_str:
                 return None
             ts = TIMEZONE.localize(datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S IST"))
-            if ts < cutoff:
-                return None
             return {
                 "timestamp": ts,
                 "download_avg": float(str(data.get("download_mbps", "0")).split()[0]),
@@ -358,22 +491,106 @@ def load_minute_data(days, host_id=None):
             log.warning(f"Skip {key}: {e}")
             return None
     
-    # Parallel fetch with up to 50 threads for faster loading
-    results = []
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = {executor.submit(fetch_and_parse, key): key for key in keys_to_fetch}
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                results.append(result)
+    def fetch_day_data(date_obj, only_recent=False):
+        """Fetch minute data for a specific date.
+        
+        only_recent=True: only fetch files from last 15 minutes (for today's fresh data)
+        """
+        year = date_obj.year
+        month = f"{date_obj.month:02d}"
+        day = f"{date_obj.day:02d}"
+        prefix = f"{base_prefix}year={year}/month={month}/day={day}/"
+        
+        keys = []
+        try:
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if key.endswith(".json") and "aggregated" not in key:
+                        # For recent-only mode, filter by LastModified
+                        if only_recent:
+                            last_modified = obj.get("LastModified")
+                            if last_modified and last_modified.replace(tzinfo=None) < recent_cutoff.replace(tzinfo=None):
+                                continue
+                        keys.append(key)
+        except Exception as e:
+            log.warning(f"Error listing {prefix}: {e}")
+            return []
+        
+        if not keys:
+            return []
+        
+        # Parallel fetch for this day
+        results = []
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(fetch_and_parse, key) for key in keys]
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
+        return results
+    
+    # Process each day with smart caching
+    all_results = []
+    current_date = cutoff.date()
+    
+    while current_date <= today:
+        date_str = current_date.strftime("%Y-%m-%d")
+        cache_key = f"minute_day_{date_str}_{host_key}"
+        
+        if current_date < today:
+            # Historical day - cache for 1 hour (data is fixed)
+            cached = data_cache.get(cache_key)
+            if cached is not None:
+                log.info(f"[CACHE HIT] {date_str}: {len(cached)} records")
+                all_results.extend(cached)
+            else:
+                log.info(f"[FETCHING] {date_str}...")
+                day_results = fetch_day_data(current_date)
+                data_cache.set(cache_key, day_results, ttl=3600)  # 1 hour
+                log.info(f"[CACHED] {date_str}: {len(day_results)} records (TTL=1h)")
+                all_results.extend(day_results)
+        else:
+            # Today - split into "past" (>15 min old) and "recent" (<15 min old)
+            past_cache_key = f"{cache_key}_past"
+            
+            # Get cached "past" data (data older than 15 min)
+            cached_past = data_cache.get(past_cache_key)
+            if cached_past is not None:
+                log.info(f"[CACHE HIT] Today's past data: {len(cached_past)} records")
+                all_results.extend(cached_past)
+            else:
+                # Fetch all of today's data, split into past and recent
+                log.info(f"[FETCHING] Today's data...")
+                all_today = fetch_day_data(current_date)
+                
+                # Split into past (>15 min) and recent (<15 min)
+                past_data = [r for r in all_today if r["timestamp"] < recent_cutoff]
+                recent_data = [r for r in all_today if r["timestamp"] >= recent_cutoff]
+                
+                # Cache past data for 15 minutes
+                if past_data:
+                    data_cache.set(past_cache_key, past_data, ttl=900)  # 15 min
+                    log.info(f"[CACHED] Today's past: {len(past_data)} records (TTL=15m)")
+                
+                all_results.extend(past_data)
+                all_results.extend(recent_data)
+                log.info(f"[FETCHED] Today: {len(past_data)} past + {len(recent_data)} recent")
+        
+        current_date += datetime.timedelta(days=1)
+    
+    log.info(f"Total minute records: {len(all_results)} for {days} days")
 
-    if not results:
+    if not all_results:
         log.warning("No minute-level data found.")
         return pd.DataFrame(columns=["timestamp"])
-    df = pd.DataFrame(results)
+    
+    df = pd.DataFrame(all_results)
+    # Filter by cutoff time (for partial days)
+    df = df[df["timestamp"] >= cutoff]
     df["date_ist"] = df["timestamp"]
     df["date_ist_str"] = df["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
-    log.info(f"Loaded {len(df)} minute-level records from S3.")
+    log.info(f"Returning {len(df)} minute-level records after time filter.")
     return df.sort_values("timestamp")
 
 @log_execution
@@ -740,7 +957,7 @@ def dashboard():
     mode = request.args.get("mode", "daily")
     days_param = int(request.args.get("days", 7))
     host_id = request.args.get("host", None)  # None = all hosts (global view)
-    force_refresh = request.args.get("refresh", "0") == "1"
+    force_refresh = request.args.get("refresh", "0") == "1" or request.args.get("force-reload", "").lower() == "true"
     async_mode = request.args.get("async", "0") == "1"
     
     # Get list of available hosts for the dropdown
@@ -795,8 +1012,11 @@ def dashboard():
     # Invalidate cache if force refresh requested
     if force_refresh:
         data_cache.invalidate(cache_key)
-        data_cache.invalidate(f"minute_data_{period}_{host_key}")  # Also invalidate raw data cache
-        log.info(f"Cache invalidated for {cache_key} (force refresh)")
+        # Clear all related caches for this mode/period/host
+        data_cache.invalidate(f"minute_data_{period}_{host_key}")
+        data_cache.invalidate(f"api_{mode}_{period}_{host_key}")
+        data_cache.invalidate(f"dashboard_api_{mode}_{period}_{host_key}")
+        log.info(f"[FORCE RELOAD] All caches invalidated for mode={mode}, period={period}, host={host_key}")
     
     # Check cache first
     cached_df = data_cache.get(cache_key)
@@ -807,7 +1027,7 @@ def dashboard():
         log.info(f"Cache MISS for {cache_key} - loading from S3")
         # Load data based on mode (with host filtering)
         if mode == "minute":
-            df = load_minute_data(period, host_id=host_id)
+            df = load_minute_data(period, host_id=host_id, force_reload=force_refresh)
         elif mode == "hourly":
             df = load_hourly_data(period, host_id=host_id)
         elif mode == "weekly":
@@ -819,12 +1039,24 @@ def dashboard():
         else:  # daily
             df = load_summaries(host_id=host_id)  # daily mode loads all and filters
         
-        # Cache the loaded data
-        data_cache.set(cache_key, df)
+        # Cache the loaded data with mode-specific TTL
+        # Minute data is expensive to fetch, so cache longer
+        cache_ttl = 600 if mode == "minute" else 120  # 10 min for minute, 2 min for others
+        data_cache.set(cache_key, df, ttl=cache_ttl)
+        log.info(f"Cached {cache_key} with TTL={cache_ttl}s")
     
     df = detect_anomalies(df)
 
-    summary = {}
+    summary = {
+        "avg_download": 0,
+        "avg_upload": 0,
+        "avg_ping": 0,
+        "below_expected": 0,
+        "total_days": 0,
+        "top_server_over_period": "N/A",
+        "public_ips": [],
+        "cidr_ranges": [],
+    }
     if not df.empty:
         top_server_over_period = df["top_server"].mode()[0] if not df["top_server"].mode().empty else "N/A"
         public_ips = sorted({
@@ -1099,6 +1331,13 @@ def dashboard():
         "connection_types": df["connection_type"].fillna("Unknown").tolist() if not df.empty and "connection_type" in df.columns else []
     }
     
+    # Downsample chart data if too many points (keeps max 500 points using LTTB algorithm)
+    # This preserves visual shape while improving chart performance
+    if len(chart_data.get("timestamps", [])) > 500:
+        original_count = len(chart_data["timestamps"])
+        chart_data = downsample_chart_data(chart_data, max_points=500)
+        log.info(f"Chart data downsampled: {original_count} -> {len(chart_data['timestamps'])} points")
+    
     # Stats summary with total_tests
     stats = {
         "avg_download": summary.get("avg_download", 0),
@@ -1163,7 +1402,7 @@ def api_data():
     mode = request.args.get("mode", "daily")
     days_param = int(request.args.get("days", 7))
     host_id = request.args.get("host", None)  # None = all hosts
-    force_refresh = request.args.get("refresh", "0") == "1"
+    force_refresh = request.args.get("refresh", "0") == "1" or request.args.get("force-reload", "").lower() == "true"
     
     # Convert days parameter to appropriate units based on mode
     if mode == "weekly":
@@ -1179,10 +1418,12 @@ def api_data():
     host_key = host_id or "all"
     cache_key = f"api_{mode}_{period}_{host_key}"
     
-    # Handle force refresh
+    # Handle force refresh - clear all related caches
     if force_refresh:
         data_cache.invalidate(cache_key)
-        log.info(f"API cache invalidated for {cache_key}")
+        data_cache.invalidate(f"dashboard_{mode}_{period}_{host_key}")
+        data_cache.invalidate(f"dashboard_api_{mode}_{period}_{host_key}")
+        log.info(f"[FORCE RELOAD] All caches invalidated for mode={mode}, period={period}, host={host_key}"))
     
     # Check cache
     cached_df = data_cache.get(cache_key)
@@ -1193,7 +1434,7 @@ def api_data():
         log.info(f"API cache MISS for {cache_key}")
         # Load data based on mode (with host filtering)
         if mode == "minute":
-            df = load_minute_data(period, host_id=host_id)
+            df = load_minute_data(period, host_id=host_id, force_reload=force_refresh)
         elif mode == "hourly":
             df = load_hourly_data(period, host_id=host_id)
         elif mode == "weekly":
@@ -1221,7 +1462,7 @@ def api_dashboard():
     mode = request.args.get("mode", "daily")
     days_param = int(request.args.get("days", 7))
     host_id = request.args.get("host", None)  # None = all hosts
-    force_refresh = request.args.get("refresh", "0") == "1"
+    force_refresh = request.args.get("refresh", "0") == "1" or request.args.get("force-reload", "").lower() == "true"
     
     # Convert days parameter to appropriate units based on mode
     if mode == "weekly":
@@ -1237,11 +1478,12 @@ def api_dashboard():
     host_key = host_id or "all"
     cache_key = f"dashboard_api_{mode}_{period}_{host_key}"
     
-    # Handle force refresh
+    # Handle force refresh - clear all related caches
     if force_refresh:
         data_cache.invalidate(cache_key)
         data_cache.invalidate(f"dashboard_{mode}_{period}_{host_key}")
-        log.info(f"Dashboard API cache invalidated for {cache_key}")
+        data_cache.invalidate(f"api_{mode}_{period}_{host_key}")
+        log.info(f"[FORCE RELOAD] All caches invalidated for mode={mode}, period={period}, host={host_key}")
     
     # Check cache for pre-computed dashboard response
     cached_response = data_cache.get(cache_key)
@@ -1253,7 +1495,7 @@ def api_dashboard():
     
     # Load data based on mode (with host filtering)
     if mode == "minute":
-        df = load_minute_data(period, host_id=host_id)
+        df = load_minute_data(period, host_id=host_id, force_reload=force_refresh)
     elif mode == "hourly":
         df = load_hourly_data(period, host_id=host_id)
     elif mode == "weekly":
@@ -1268,7 +1510,14 @@ def api_dashboard():
     df = detect_anomalies(df)
     
     # Build response data
-    summary = {}
+    summary = {
+        "avg_download": 0,
+        "avg_upload": 0,
+        "avg_ping": 0,
+        "below_expected": 0,
+        "total_days": 0,
+        "top_server_over_period": "N/A",
+    }
     percentiles = {}
     trends = {}
     historical_records = {}
@@ -1358,6 +1607,10 @@ def api_dashboard():
         "upload": df["upload_avg"].fillna(0).tolist() if not df.empty else [],
         "ping": df["ping_avg"].fillna(0).tolist() if not df.empty else [],
     }
+    
+    # Downsample chart data if too many points (keeps max 500 points using LTTB algorithm)
+    if len(chart_data.get("timestamps", [])) > 500:
+        chart_data = downsample_chart_data(chart_data, max_points=500)
     
     stats = {
         "avg_download": summary.get("avg_download", 0),

@@ -2299,12 +2299,14 @@
             });
         });
 
-        // Update period label based on view mode
+        // Update period label and options based on view mode
         function updatePeriodLabel() {
             const viewMode = document.getElementById('viewMode').value;
             const periodLabel = document.querySelector('label[for="periodDays"]');
             const periodSelect = document.getElementById('periodDays');
+            const currentValue = periodSelect.value;
             
+            // Define label text for each mode
             const labelText = {
                 'minute': 'Period (Days)',
                 'hourly': 'Period (Days)',
@@ -2314,14 +2316,82 @@
                 'yearly': 'Period (Years)'
             };
             
+            // Define options for each mode
+            const modeOptions = {
+                'minute': [
+                    { value: 1, text: 'Last 1 day' },
+                    { value: 3, text: 'Last 3 days' },
+                    { value: 7, text: 'Last 7 days' },
+                    { value: 14, text: 'Last 14 days' },
+                    { value: 30, text: 'Last 30 days' }
+                ],
+                'hourly': [
+                    { value: 1, text: 'Last 1 day' },
+                    { value: 3, text: 'Last 3 days' },
+                    { value: 7, text: 'Last 7 days' },
+                    { value: 14, text: 'Last 14 days' },
+                    { value: 30, text: 'Last 30 days' },
+                    { value: 90, text: 'Last 90 days' }
+                ],
+                'daily': [
+                    { value: 7, text: 'Last 7 days' },
+                    { value: 14, text: 'Last 14 days' },
+                    { value: 30, text: 'Last 30 days' },
+                    { value: 60, text: 'Last 60 days' },
+                    { value: 90, text: 'Last 90 days' },
+                    { value: 180, text: 'Last 180 days' },
+                    { value: 365, text: 'Last 365 days' }
+                ],
+                'weekly': [
+                    { value: 4, text: 'Last 4 weeks' },
+                    { value: 8, text: 'Last 8 weeks' },
+                    { value: 12, text: 'Last 12 weeks' },
+                    { value: 26, text: 'Last 26 weeks' },
+                    { value: 52, text: 'Last 52 weeks' }
+                ],
+                'monthly': [
+                    { value: 3, text: 'Last 3 months' },
+                    { value: 6, text: 'Last 6 months' },
+                    { value: 12, text: 'Last 12 months' },
+                    { value: 24, text: 'Last 24 months' },
+                    { value: 36, text: 'Last 36 months' }
+                ],
+                'yearly': [
+                    { value: 1, text: 'Last 1 year' },
+                    { value: 2, text: 'Last 2 years' },
+                    { value: 3, text: 'Last 3 years' },
+                    { value: 5, text: 'Last 5 years' },
+                    { value: 10, text: 'Last 10 years' }
+                ]
+            };
+            
             // Update the label text
             if (periodLabel && labelText[viewMode]) {
                 periodLabel.textContent = labelText[viewMode];
             }
             
-            // Optionally update dropdown options based on view mode
-            // For now, keeping the same options for all modes
-            // Could customize options per mode in future enhancement
+            // Update dropdown options
+            if (periodSelect && modeOptions[viewMode]) {
+                const options = modeOptions[viewMode];
+                periodSelect.innerHTML = '';
+                
+                let hasCurrentValue = false;
+                options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.text;
+                    if (opt.value == currentValue) {
+                        option.selected = true;
+                        hasCurrentValue = true;
+                    }
+                    periodSelect.appendChild(option);
+                });
+                
+                // If current value not in new options, select the first one
+                if (!hasCurrentValue && options.length > 0) {
+                    periodSelect.options[0].selected = true;
+                }
+            }
         }
 
         // Reset Filters Function
