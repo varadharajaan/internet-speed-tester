@@ -15,4 +15,5 @@ stack-outputs.txt
 .idea/
 .mypy_cache/
 .pytest_cache/
+*.vmoptions
 
