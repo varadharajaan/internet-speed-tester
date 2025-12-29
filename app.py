@@ -1423,7 +1423,7 @@ def api_data():
         data_cache.invalidate(cache_key)
         data_cache.invalidate(f"dashboard_{mode}_{period}_{host_key}")
         data_cache.invalidate(f"dashboard_api_{mode}_{period}_{host_key}")
-        log.info(f"[FORCE RELOAD] All caches invalidated for mode={mode}, period={period}, host={host_key}"))
+        log.info(f"[FORCE RELOAD] All caches invalidated for mode={mode}, period={period}, host={host_key}")
     
     # Check cache
     cached_df = data_cache.get(cache_key)
