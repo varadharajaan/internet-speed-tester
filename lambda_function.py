@@ -981,10 +981,19 @@ def aggregate_yearly():
 
 # --- Lambda handler -----------------------------------------------------------
 # ---------------------------------------------------------------------------
-# 🔀 Extended Lambda Handler (supporting "mode": hourly|daily|weekly|monthly|yearly)
+# Extended Lambda Handler (supporting "mode": hourly|daily|weekly|monthly|yearly)
 # ---------------------------------------------------------------------------
 def lambda_handler(event, context):
-    mode = (event or {}).get("mode") if isinstance(event, dict) else None
+    # Support both EventBridge events (event.mode) and Lambda Function URL (queryStringParameters.mode)
+    mode = None
+    custom_date = None
+    
+    if isinstance(event, dict):
+        # Check for Lambda Function URL query parameters first
+        query_params = event.get("queryStringParameters") or {}
+        mode = query_params.get("mode") or event.get("mode")
+        custom_date = query_params.get("date") or event.get("date")
+    
     log.info(f"Lambda trigger - mode={mode or 'daily'}")
     try:
         if mode == "hourly":
@@ -996,7 +1005,6 @@ def lambda_handler(event, context):
         elif mode == "yearly":
             result = aggregate_yearly()
         else:
-            custom_date = (event or {}).get("date")
             result = run_daily(custom_date)
 
 
