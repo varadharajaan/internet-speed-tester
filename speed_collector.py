@@ -254,7 +254,7 @@ def round_to_15min(dt):
 
 def get_public_ip():
     try:
-        ip = requests.get(PUBLIC_IP_API).text.strip()
+        ip = requests.get(PUBLIC_IP_API, timeout=5).text.strip()
         log.info(f"Public IP: {ip}")
         return ip
     except Exception as e:
@@ -298,15 +298,21 @@ def run_ookla_cli():
     # Try local Ookla CLI first (for Windows Task Scheduler), then PATH
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_speedtest = os.path.join(script_dir, "speedtest.exe")
-    
+
+    # Always include acceptance flags to prevent interactive blocking
+    base_args = ["--format=json", "--accept-license", "--accept-gdpr"]
+
     cmds = []
     if os.path.exists(local_speedtest):
-        cmds.append([local_speedtest, "--format=json"])
-    cmds.extend([["speedtest", "--format=json"], ["ookla-speedtest", "--format=json"]])
-    
+        cmds.append([local_speedtest, *base_args])
+    cmds.extend([
+        ["speedtest", *base_args],
+        ["ookla-speedtest", *base_args],
+    ])
+
     last_err = None
 
-    # --- Windows-specific flags to suppress window ---
+    # Windows: suppress window
     creationflags = 0
     startupinfo = None
     if platform.system() == "Windows":
@@ -325,19 +331,27 @@ def run_ookla_cli():
                 text=True,
                 timeout=SPEEDTEST_TIMEOUT,
                 startupinfo=startupinfo,
-                creationflags=creationflags
+                creationflags=creationflags,
+                check=False,
             )
 
-            if res.returncode == 0 and res.stdout.strip():
-                data = json.loads(res.stdout)
+            stdout = (res.stdout or "").strip()
+            stderr = (res.stderr or "").strip()
+
+            if res.returncode == 0 and stdout:
+                data = json.loads(stdout)
+
                 dl_bps = float(data.get("download", {}).get("bandwidth", 0.0)) * 8.0
                 ul_bps = float(data.get("upload", {}).get("bandwidth", 0.0)) * 8.0
                 dl, ul = dl_bps / 1_000_000.0, ul_bps / 1_000_000.0
                 ping = float(data.get("ping", {}).get("latency", 0.0))
+
                 server = data.get("server", {}) or {}
-                result_url = data.get("result", {}).get("url", "")
+                result_url = (data.get("result", {}) or {}).get("url", "")
+
                 ts_utc = datetime.datetime.now(datetime.UTC).replace(tzinfo=pytz.utc)
                 ts_ist = ts_utc.astimezone(TIMEZONE)
+
                 log.info(f"Ookla result: {dl:.2f} Mbps ↓ / {ul:.2f} Mbps ↑ / {ping:.2f} ms")
                 return normalize_record(
                     dl, ul, ping,
@@ -345,14 +359,25 @@ def run_ookla_cli():
                     server.get("country"), server.get("host"), server.get("id"),
                     ts_utc, ts_ist, result_url
                 )
-            else:
-                last_err = res.stderr or "Unknown error"
+
+            # Non-zero or empty stdout: log enough context to debug
+            last_err = f"rc={res.returncode} stderr={stderr[:500]} stdout={stdout[:200]}"
+            log.warning(f"Ookla CLI failed: {last_err}")
+
+        except subprocess.TimeoutExpired:
+            # Hard-kill any stuck speedtest.exe on Windows
+            if platform.system() == "Windows":
+                subprocess.run(["taskkill", "/IM", "speedtest.exe", "/F", "/T"],
+                               capture_output=True, text=True)
+            last_err = f"Timed out after {SPEEDTEST_TIMEOUT}s"
+            log.error(f"Ookla CLI timed out: {' '.join(cmd)}")
 
         except Exception as e:
             last_err = str(e)
             log.exception("Ookla CLI execution error")
 
     raise RuntimeError(f"Ookla CLI failed: {last_err}")
+
 
 # ===============================
 # AWS UPLOAD
@@ -405,7 +430,30 @@ def perform_speedtest():
 # ===============================
 # ENTRY POINT
 # ===============================
+
+LOCK_PATH = os.path.join(os.getcwd(), "collector.lock")
+
+def acquire_lock():
+    try:
+        fd = os.open(LOCK_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+
+def release_lock():
+    try:
+        os.remove(LOCK_PATH)
+    except FileNotFoundError:
+        pass
+
 if __name__ == "__main__":
-    log.info("Starting 15-min scheduled speed test job...")
-    perform_speedtest()
-    log.info("Speed test job finished successfully.")
+    if not acquire_lock():
+        sys.exit(0)
+    try:
+        log.info("Starting 15-min scheduled speed test job...")
+        perform_speedtest()
+        log.info("Speed test job finished successfully.")
+    finally:
+        release_lock()

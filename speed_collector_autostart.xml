@@ -3,10 +3,10 @@
   <RegistrationInfo>
     <Date>2025-10-22T00:00:00</Date>
     <Author>vd-speed-test</Author>
-    <Description>Run Internet Speed Collector every 15 minutes</Description>
+    <Description>Run Internet Speed Collector every 15 minutes (silent)</Description>
   </RegistrationInfo>
+
   <Triggers>
-    <!-- Run every 15 minutes indefinitely -->
     <CalendarTrigger>
       <StartBoundary>2025-10-22T00:00:00</StartBoundary>
       <Enabled>true</Enabled>
@@ -20,35 +20,51 @@
       </Repetition>
     </CalendarTrigger>
   </Triggers>
+
   <Principals>
     <Principal id="Author">
-      <!-- Run with your account; Highest privileges ensures network/S3 access -->
-      <RunLevel>HighestAvailable</RunLevel>
+      <!-- Replace with your Windows user. Examples:
+           varad
+           DESKTOP-ABCD123\varad
+           varad@yourdomain.com
+      -->
+      <UserId>varad-studio\varad</UserId>
+
+      <!-- Password = "Run whether user is logged on or not"
+           (Windows will ask for password when you register/import) -->
+      <LogonType>S4U</LogonType>
+
+      <!-- Avoid UAC/UI issues; only use HighestAvailable if truly needed -->
+      <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
   </Principals>
+
   <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>StopExisting</MultipleInstancesPolicy>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>true</AllowHardTerminate>
     <StartWhenAvailable>true</StartWhenAvailable>
     <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+
     <IdleSettings>
       <StopOnIdleEnd>false</StopOnIdleEnd>
       <RestartOnIdle>false</RestartOnIdle>
     </IdleSettings>
+
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
     <Hidden>true</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>true</WakeToRun>    
-    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <WakeToRun>false</WakeToRun>
     <Priority>4</Priority>
   </Settings>
+
   <Actions Context="Author">
     <Exec>
-      <Command>C:\vd-speed-test\.venv\Scripts\pythonw.exe</Command>
-      <Arguments>"C:\vd-speed-test\speed_collector.py"</Arguments>
+      <Command>C:\Windows\System32\wscript.exe</Command>
+      <Arguments>"C:\vd-speed-test\run_speed_collector.vbs"</Arguments>
       <WorkingDirectory>C:\vd-speed-test</WorkingDirectory>
     </Exec>
   </Actions>
