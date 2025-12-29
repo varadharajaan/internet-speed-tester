@@ -7,10 +7,10 @@
 │  Internet Speed Overview                                                │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                           │
-│  Mode: [Daily     ▼]  Period: [Last 7 days ▼]  ☑ Show URLs             │
-│        └─ Click me!             └─ Adjusts automatically                │
+│  Host: [All Hosts ▼]  Mode: [Daily ▼]  Period: [Last 7 days ▼]        │
+│        └─ Filter host        └─ View type      └─ Time range            │
 │                                                                           │
-│  Expected Speed (Mbps): [200]  [Apply]                                  │
+│  Expected Speed (Mbps): [200]  [Apply]  [🔄 Refresh]                   │
 │                                                                           │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  🔍 Advanced Filters                                                     │
@@ -55,6 +55,25 @@
 │  └───────────┴──────────┴─────────┴──────┴─────────────┴──────────┘   │
 │                                                                           │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+## ⚡ Performance Features
+
+### Smart Caching
+- All data cached for **2 minutes** (120 second TTL)
+- Click **🔄 Refresh** button or add `?force_refresh=1` to get fresh data
+
+### Async Loading
+For instant page load, use `?async=1`:
+```
+http://localhost:8080/?mode=daily&days=30&async=1
+```
+Page renders immediately with loading spinners, data fills in progressively.
+
+### Multi-Host Support
+Use the **Host** dropdown or `?host=<id>` parameter to filter by specific host:
+```
+http://localhost:8080/?mode=daily&days=30&host=home-primary
 ```
 
 ## 📊 View Comparisons

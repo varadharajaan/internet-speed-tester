@@ -1,0 +1,1 @@
+{"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": "{\n  \"message\": \"ok\",\n  \"mode\": \"daily\",\n  \"result\": {\n    \"message\": \"No records found\",\n    \"records\": 0\n  }\n}"}

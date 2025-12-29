@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 650" width="800" height="650">
+  <defs>
+    <style>
+      .box { fill: #1e293b; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+      .box-host { fill: #1e3a5f; stroke: #60a5fa; }
+      .box-s3 { fill: #1e3a3a; stroke: #2dd4bf; }
+      .box-lambda { fill: #3b1e5f; stroke: #a78bfa; }
+      .box-dashboard { fill: #1e3b2f; stroke: #4ade80; }
+      .title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #f1f5f9; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 11px; fill: #94a3b8; }
+      .label { font-family: Arial, sans-serif; font-size: 10px; fill: #64748b; font-style: italic; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .header { font-family: Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #f1f5f9; }
+      .subheader { font-family: Arial, sans-serif; font-size: 12px; fill: #94a3b8; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="650" fill="#0f172a"/>
+  
+  <!-- Header -->
+  <text x="400" y="40" text-anchor="middle" class="header">VD Speed Test Architecture</text>
+  <text x="400" y="60" text-anchor="middle" class="subheader">Multi-Host Speed Collection System</text>
+  
+  <!-- Host A -->
+  <rect x="80" y="90" width="160" height="100" class="box box-host"/>
+  <text x="160" y="115" text-anchor="middle" class="title">🖥️ Host A</text>
+  <text x="160" y="135" text-anchor="middle" class="subtitle">speed_collector.py</text>
+  <text x="160" y="152" text-anchor="middle" class="subtitle">config.json</text>
+  <text x="160" y="175" text-anchor="middle" class="label">host_id="home-primary"</text>
+  
+  <!-- Host B -->
+  <rect x="320" y="90" width="160" height="100" class="box box-host"/>
+  <text x="400" y="115" text-anchor="middle" class="title">🖥️ Host B</text>
+  <text x="400" y="135" text-anchor="middle" class="subtitle">speed_collector.py</text>
+  <text x="400" y="152" text-anchor="middle" class="subtitle">config.json</text>
+  <text x="400" y="175" text-anchor="middle" class="label">host_id="office"</text>
+  
+  <!-- Host C -->
+  <rect x="560" y="90" width="160" height="100" class="box box-host"/>
+  <text x="640" y="115" text-anchor="middle" class="title">🖥️ Host C</text>
+  <text x="640" y="135" text-anchor="middle" class="subtitle">speed_collector.py</text>
+  <text x="640" y="152" text-anchor="middle" class="subtitle">config.json</text>
+  <text x="640" y="175" text-anchor="middle" class="label">host_id="backup"</text>
+  
+  <!-- Arrows from hosts -->
+  <path d="M160,190 L160,220 L400,220" class="arrow" style="marker-end: none;"/>
+  <path d="M400,190 L400,220" class="arrow" style="marker-end: none;"/>
+  <path d="M640,190 L640,220 L400,220" class="arrow" style="marker-end: none;"/>
+  <path d="M400,220 L400,255" class="arrow"/>
+  
+  <!-- S3 Buckets -->
+  <rect x="250" y="260" width="300" height="100" class="box box-s3"/>
+  <text x="400" y="290" text-anchor="middle" class="title">☁️ AWS S3 Buckets</text>
+  <text x="400" y="312" text-anchor="middle" class="subtitle">vd-speed-test (daily/minute)</text>
+  <text x="400" y="329" text-anchor="middle" class="subtitle">vd-speed-test-hourly/weekly/monthly/yearly</text>
+  <text x="400" y="350" text-anchor="middle" class="label">Key: host={id}/year=YYYY/month=MM/day=DD/...</text>
+  
+  <!-- Arrow S3 to Lambda -->
+  <path d="M400,360 L400,405" class="arrow"/>
+  
+  <!-- Lambda Aggregator -->
+  <rect x="250" y="410" width="300" height="90" class="box box-lambda"/>
+  <text x="400" y="440" text-anchor="middle" class="title">⚡ Lambda Aggregator</text>
+  <text x="400" y="462" text-anchor="middle" class="subtitle">lambda_function.py</text>
+  <text x="400" y="482" text-anchor="middle" class="label">Per-host + Global aggregations</text>
+  
+  <!-- Arrow Lambda to Dashboard -->
+  <path d="M400,500 L400,545" class="arrow"/>
+  
+  <!-- Dashboard -->
+  <rect x="250" y="550" width="300" height="80" class="box box-dashboard"/>
+  <text x="400" y="580" text-anchor="middle" class="title">📊 Dashboard (app.py)</text>
+  <text x="400" y="602" text-anchor="middle" class="subtitle">Host Selector Dropdown</text>
+  <text x="400" y="620" text-anchor="middle" class="label">?mode=daily&amp;host=home-primary</text>
+  
+  <!-- Legend -->
+  <rect x="620" y="280" width="150" height="120" fill="#1e293b" stroke="#475569" stroke-width="1" rx="5"/>
+  <text x="695" y="300" text-anchor="middle" class="subtitle" style="font-weight: bold;">Data Flow</text>
+  <line x1="640" y1="315" x2="680" y2="315" stroke="#60a5fa" stroke-width="2"/>
+  <text x="760" y="320" text-anchor="end" class="label">Host Collectors</text>
+  <line x1="640" y1="340" x2="680" y2="340" stroke="#2dd4bf" stroke-width="2"/>
+  <text x="760" y="345" text-anchor="end" class="label">S3 Storage</text>
+  <line x1="640" y1="365" x2="680" y2="365" stroke="#a78bfa" stroke-width="2"/>
+  <text x="760" y="370" text-anchor="end" class="label">Lambda</text>
+  <line x1="640" y1="390" x2="680" y2="390" stroke="#4ade80" stroke-width="2"/>
+  <text x="760" y="395" text-anchor="end" class="label">Dashboard</text>
+</svg>

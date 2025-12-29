@@ -57,6 +57,25 @@ http://localhost:8080/?mode=minute&days=7
 
 # View all weeks
 http://localhost:8080/?mode=weekly
+```
+
+## ⚡ Performance Parameters
+
+| Parameter | Example | Description |
+|-----------|---------|-------------|
+| `async=1` | `?mode=daily&async=1` | Instant page load, data loads progressively via JavaScript |
+| `force_refresh=1` | `?mode=daily&force_refresh=1` | Bypass 2-minute cache, fetch fresh data from S3 |
+| `host=<id>` | `?mode=daily&host=home-primary` | Filter data for specific host only |
+
+### Performance Features
+
+- **Smart Caching**: All S3 data cached in memory for 2 minutes (120 seconds TTL)
+- **Parallel Loading**: ThreadPoolExecutor with 20-50 threads for fast S3 fetches
+- **Async Mode**: Returns HTML immediately, JavaScript loads data in background
+
+```
+# Combined example: async load, specific host, force refresh
+http://localhost:8080/?mode=daily&days=30&host=office&async=1&force_refresh=1
 
 # View all months
 http://localhost:8080/?mode=monthly

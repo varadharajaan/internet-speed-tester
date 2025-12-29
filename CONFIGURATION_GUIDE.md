@@ -17,15 +17,34 @@ All hardcoded variables have been migrated to `config.json`. The following files
   "expected_speed_mbps": 200,
   "tolerance_percent": 10,
   "s3_bucket": "vd-speed-test",
+  "s3_bucket_hourly": "vd-speed-test-hourly-prod",
+  "s3_bucket_weekly": "vd-speed-test-weekly-prod",
+  "s3_bucket_monthly": "vd-speed-test-monthly-prod",
+  "s3_bucket_yearly": "vd-speed-test-yearly-prod",
   "aws_region": "ap-south-1",
   "timezone": "Asia/Kolkata",
   "log_level": "INFO",
   "log_max_bytes": 10485760,
   "log_backup_count": 5,
   "speedtest_timeout": 180,
-  "public_ip_api": "https://api.ipify.org"
+  "public_ip_api": "https://api.ipify.org",
+  "host_id": "home-primary",
+  "host_name": "Home Primary",
+  "host_location": "Mumbai, India",
+  "host_isp": "Jio Fiber"
 }
 ```
+
+### 🖥️ Multi-Host Configuration
+
+Each host running `speed_collector.py` should have a unique `host_id`:
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| `host_id` | Unique identifier for this collector | `home-primary`, `office-main` |
+| `host_name` | Human-readable name | `Home Primary`, `Office Main` |
+| `host_location` | Physical location | `Mumbai, India` |
+| `host_isp` | Internet service provider | `Jio Fiber`, `Airtel` |
 
 ## 🔧 How to Use
 

@@ -247,6 +247,70 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* Skeleton Loading Animation */
+        .skeleton {
+            background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .skeleton-text {
+            height: 1.5rem;
+            width: 60%;
+            margin-bottom: 0.5rem;
+        }
+        
+        .skeleton-stat {
+            height: 2.5rem;
+            width: 80%;
+        }
+        
+        .skeleton-chart {
+            height: 300px;
+            width: 100%;
+        }
+        
+        /* Hide skeleton when data loaded */
+        .data-loaded .skeleton-wrapper {
+            display: none;
+        }
+        
+        .data-loaded .data-wrapper {
+            display: block;
+        }
+        
+        .data-wrapper {
+            display: none;
+        }
+        
+        /* Async loading overlay */
+        .async-loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .async-loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -267,6 +331,15 @@
                         </svg>
                         Last Updated: <span id="lastUpdate">{{ last_update }}</span>
                     </span>
+                    <!-- Force Refresh Button -->
+                    <button onclick="forceRefresh()" id="refreshBtn" 
+                            class="flex items-center space-x-1 bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105"
+                            title="Bypass cache and get latest data">
+                        <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -281,7 +354,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Download</p>
-                        <p class="text-3xl font-bold text-indigo-600">{{ "%.2f"|format(stats.avg_download or 0) }}</p>
+                        <p class="text-3xl font-bold text-indigo-600" data-stat="download">{% if async_mode %}<span class="skeleton skeleton-stat inline-block"></span>{% else %}{{ "%.2f"|format(stats.avg_download or 0) }}{% endif %}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
                         {% if trends and trends.download_change is defined %}
                         <div class="mt-2 flex items-center">
@@ -315,7 +388,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Upload</p>
-                        <p class="text-3xl font-bold text-purple-600">{{ "%.2f"|format(stats.avg_upload or 0) }}</p>
+                        <p class="text-3xl font-bold text-purple-600" data-stat="upload">{% if async_mode %}<span class="skeleton skeleton-stat inline-block"></span>{% else %}{{ "%.2f"|format(stats.avg_upload or 0) }}{% endif %}</p>
                         <p class="text-xs text-gray-500 mt-1">Mbps</p>
                         {% if trends and trends.upload_change is defined %}
                         <div class="mt-2 flex items-center">
@@ -349,7 +422,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Avg Ping <span class="text-xs text-gray-400">(lower is better)</span></p>
-                        <p class="text-3xl font-bold text-green-600">{{ "%.2f"|format(stats.avg_ping or 0) }}</p>
+                        <p class="text-3xl font-bold text-green-600" data-stat="ping">{% if async_mode %}<span class="skeleton skeleton-stat inline-block"></span>{% else %}{{ "%.2f"|format(stats.avg_ping or 0) }}{% endif %}</p>
                         <p class="text-xs text-gray-500 mt-1">ms</p>
                         {% if trends and trends.ping_change is defined %}
                         <div class="mt-2 flex items-center">
@@ -383,7 +456,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex-1">
                         <p class="text-sm font-medium text-gray-600 mb-1">Total Tests</p>
-                        <p class="text-3xl font-bold text-blue-600">{{ stats.total_tests or 0 }}</p>
+                        <p class="text-3xl font-bold text-blue-600" data-stat="total">{% if async_mode %}<span class="skeleton skeleton-stat inline-block"></span>{% else %}{{ stats.total_tests or 0 }}{% endif %}</p>
                         <p class="text-xs text-gray-500 mt-1">completed</p>
                         {% if trends and trends.tests_change is defined %}
                         <div class="mt-2 flex items-center">
@@ -816,7 +889,27 @@
                     </svg>
                     ⚙️ Primary Controls
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <!-- Host Selector -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">🖥️ Host</label>
+                        <select id="hostSelector" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg smooth-transition focus:ring-2 focus:ring-purple-500 focus:border-purple-500 font-medium bg-gradient-to-r from-purple-50 to-indigo-50">
+                            <option value="" {% if not selected_host %}selected{% endif %}>All Hosts</option>
+                            {% if available_hosts %}
+                                {% for host in available_hosts %}
+                                    {% if host != '_legacy' %}
+                                        <option value="{{ host }}" {% if selected_host == host %}selected{% endif %}>{{ host }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                                {% for host in available_hosts %}
+                                    {% if host == '_legacy' %}
+                                        <option value="_legacy" {% if selected_host == '_legacy' %}selected{% endif %}>Legacy Data</option>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    
                     <!-- View Mode -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Mode</label>
@@ -1228,6 +1321,118 @@
     </div>
 
     <script>
+        // Async Loading Configuration
+        const ASYNC_MODE = {{ async_mode|default(false)|tojson }};
+        const CURRENT_MODE = '{{ mode }}';
+        const CURRENT_DAYS = {{ days }};
+        
+        // Async data loading function
+        async function loadDashboardDataAsync() {
+            if (!ASYNC_MODE) return;
+            
+            console.log('Loading dashboard data asynchronously...');
+            const startTime = performance.now();
+            
+            try {
+                const url = `/api/dashboard?mode=${CURRENT_MODE}&days=${CURRENT_DAYS}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                    console.log(`Dashboard data loaded in ${elapsed}s`);
+                    
+                    // Update stats cards
+                    updateStatsCards(data.stats, data.trends);
+                    
+                    // Update charts
+                    updateChartsWithData(data.chart_data);
+                    
+                    // Update last updated timestamp
+                    document.getElementById('lastUpdate').textContent = data.last_update;
+                    
+                    // Mark body as data-loaded
+                    document.body.classList.add('data-loaded');
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            }
+        }
+        
+        function updateStatsCards(stats, trends) {
+            // Update download stat
+            const downloadStat = document.querySelector('[data-stat="download"]');
+            if (downloadStat) {
+                downloadStat.textContent = stats.avg_download?.toFixed(2) || '0.00';
+            }
+            
+            // Update upload stat
+            const uploadStat = document.querySelector('[data-stat="upload"]');
+            if (uploadStat) {
+                uploadStat.textContent = stats.avg_upload?.toFixed(2) || '0.00';
+            }
+            
+            // Update ping stat
+            const pingStat = document.querySelector('[data-stat="ping"]');
+            if (pingStat) {
+                pingStat.textContent = stats.avg_ping?.toFixed(2) || '0.00';
+            }
+            
+            // Update total tests
+            const totalStat = document.querySelector('[data-stat="total"]');
+            if (totalStat) {
+                totalStat.textContent = stats.total_tests || '0';
+            }
+        }
+        
+        function updateChartsWithData(newChartData) {
+            // Update global chart data
+            if (newChartData) {
+                chartData.timestamps = newChartData.timestamps || [];
+                chartData.download = newChartData.download || [];
+                chartData.upload = newChartData.upload || [];
+                chartData.ping = newChartData.ping || [];
+                
+                // Reinitialize charts with new data
+                initSpeedChart();
+                initPingChart();
+            }
+        }
+        
+        // Initialize async loading on page load
+        if (ASYNC_MODE) {
+            document.addEventListener('DOMContentLoaded', loadDashboardDataAsync);
+        }
+        
+        // Force Refresh Function - bypasses cache to get latest data
+        function forceRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            const icon = document.getElementById('refreshIcon');
+            
+            // Add spinning animation
+            icon.classList.add('animate-spin');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            
+            // Get current URL and add/update refresh parameter
+            const url = new URL(window.location.href);
+            url.searchParams.set('refresh', '1');
+            
+            // Navigate to the refreshed URL
+            window.location.href = url.toString();
+        }
+        
+        // Add spinning animation style
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            .animate-spin { animation: spin 1s linear infinite; }
+        `;
+        document.head.appendChild(style);
+
         // Chart Data Preparation
         const chartData = {{ chart_data|tojson }};
         
@@ -2207,13 +2412,20 @@
             localStorage.setItem('showUrls', checkbox.checked);
         }
 
-        // Update URL with primary controls (mode and days) using GET
+        // Update URL with primary controls (mode, days, and host) using GET
         function updatePrimaryControls() {
             const mode = document.getElementById('viewMode').value;
             const days = document.getElementById('periodDays').value;
+            const host = document.getElementById('hostSelector').value;
             
-            // Navigate to new URL with query parameters
-            window.location.href = `/dashboard?mode=${mode}&days=${days}`;
+            // Build URL with query parameters
+            let url = `/dashboard?mode=${mode}&days=${days}`;
+            if (host) {
+                url += `&host=${encodeURIComponent(host)}`;
+            }
+            
+            // Navigate to new URL
+            window.location.href = url;
         }
 
         // Initialize URL column visibility on page load

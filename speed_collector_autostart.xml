@@ -39,15 +39,15 @@
     </IdleSettings>
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
+    <Hidden>true</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>true</WakeToRun>    
     <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
-    <Priority>7</Priority>
+    <Priority>4</Priority>
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>pythonw.exe</Command>
+      <Command>C:\vd-speed-test\.venv\Scripts\pythonw.exe</Command>
       <Arguments>"C:\vd-speed-test\speed_collector.py"</Arguments>
       <WorkingDirectory>C:\vd-speed-test</WorkingDirectory>
     </Exec>

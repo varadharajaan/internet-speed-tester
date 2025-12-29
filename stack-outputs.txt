@@ -1,0 +1,57 @@
+================================================================================
+                    VD-SPEEDTEST STACK DEPLOYMENT OUTPUTS
+================================================================================
+Deployed: 2025-12-29 15:34:08
+Stack:    vd-speedtest-stack
+Region:   ap-south-1
+================================================================================
+
+AggregatorFunctionUrl
+  URL for Daily Aggregator Function
+  https://jjus2hlrfsibvt7oujidizojtm0agpye.lambda-url.ap-south-1.on.aws/
+
+AggregatorLogGroupName
+  Aggregator log group
+  /aws/lambda/vd-speedtest-daily-aggregator-prod
+
+AlertsTopicArn
+  SNS Topic ARN for alerts ? confirm the email subscription
+  arn:aws:sns:ap-south-1:756021455659:vd-speedtest-alerts-prod
+
+CloudWatchAlarmsUrl
+  CloudWatch Alarms Console
+  https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#alarmsV2:
+
+CloudWatchLogsInsightsUrl
+  CloudWatch Logs Insights
+  https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#logsV2:logs-insights
+
+DashboardFunctionUrl
+  URL for Dashboard Function
+  https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/
+
+DashboardLogGroupName
+  Dashboard log group
+  /aws/lambda/vd-speedtest-dashboard-prod
+
+HourlyCheckerFunctionUrl
+  URL for Hourly Checker Function
+  https://jblihbpi33hwyyoi6klovkozky0gjyxt.lambda-url.ap-south-1.on.aws/
+
+HourlyCheckerLogGroupName
+  Checker log group
+  /aws/lambda/vd-speedtest-hourly-checker-prod
+
+MainDashboardUrl
+  Main CloudWatch Monitoring Dashboard
+  https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=vd-speedtest-main-prod
+
+PerformanceDashboardUrl
+  Performance Metrics Dashboard
+  https://console.aws.amazon.com/cloudwatch/home?region=ap-south-1#dashboards:name=vd-speedtest-performance-prod
+
+SNSNotificationEmail
+  Email address subscribed to SNS alerts
+  varathu09@gmail.com
+
+================================================================================

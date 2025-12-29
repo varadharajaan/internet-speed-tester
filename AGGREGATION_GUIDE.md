@@ -3,6 +3,67 @@
 ## Overview
 Your speed test system already has **full support for weekly/monthly/yearly views**! 🎉
 
+The system now also supports **multi-host deployments**, allowing you to run speed collectors on multiple machines and view data per-host or combined.
+
+## ⚡ Performance Features
+
+### Smart Caching (2-Minute TTL)
+The dashboard caches all S3 data in memory for 2 minutes to reduce load times and API costs.
+
+| Feature | Description |
+|---------|-------------|
+| **TTL** | 120 seconds (2 minutes) |
+| **Scope** | Per host, per mode, per time range |
+| **Force Refresh** | Add `?force_refresh=1` to bypass cache |
+
+### Parallel Data Loading
+All S3 fetches use ThreadPoolExecutor for parallel execution:
+- **20-50 threads** depending on data type
+- Reduces 30+ second loads to ~2 seconds
+
+### Async Loading Mode
+For instant page loads, use `?async=1`:
+
+```
+# Standard load (wait for all data)
+/?mode=daily&days=30
+
+# Async load (instant page, progressive data)
+/?mode=daily&days=30&async=1
+
+# Force refresh with async
+/?mode=daily&days=30&async=1&force_refresh=1
+```
+
+**How it works:**
+1. Page renders immediately with loading spinners
+2. JavaScript fetches data from `/api/dashboard`
+3. Charts and tables populate progressively
+
+## Multi-Host Filtering
+
+### Dashboard Host Selector
+
+The dashboard includes a host selector dropdown in the Primary Controls:
+
+1. **All Hosts** - View combined statistics from all hosts
+2. **Individual Hosts** - Select a specific host to view only its data
+
+### URL Parameters
+
+Add `host` parameter to filter by specific host:
+
+```
+# View all hosts (default)
+?mode=daily&days=30
+
+# View specific host
+?mode=daily&days=30&host=home-primary
+
+# Weekly view for specific host
+?mode=weekly&days=52&host=office-backup
+```
+
 ## Dashboard Views
 
 ### Accessing Different Time Views
@@ -152,12 +213,20 @@ curl "https://<your-dashboard-url>/api/data?mode=yearly&days=10"
 
 ## S3 Bucket Structure
 
-Your aggregated data is stored in separate S3 buckets:
+Your aggregated data is stored in separate S3 buckets with support for multi-host deployments:
 
 ### Daily Aggregations
 **Bucket:** `vd-speed-test`
 ```
 s3://vd-speed-test/aggregated/
+  # Per-host aggregation
+  host=home-primary/
+    year=2025/
+      month=202511/
+        day=20251102/
+          speed_test_summary.json
+  
+  # Global aggregation (all hosts combined)
   year=2025/
     month=202511/
       day=20251102/
@@ -168,6 +237,15 @@ s3://vd-speed-test/aggregated/
 **Bucket:** `vd-speed-test-hourly-prod`
 ```
 s3://vd-speed-test-hourly-prod/aggregated/
+  # Per-host aggregation
+  host=home-primary/
+    year=2025/
+      month=202511/
+        day=20251102/
+          hour=2025110217/
+            speed_test_summary.json
+  
+  # Global aggregation
   year=2025/
     month=202511/
       day=20251102/
@@ -179,6 +257,13 @@ s3://vd-speed-test-hourly-prod/aggregated/
 **Bucket:** `vd-speed-test-weekly-prod`
 ```
 s3://vd-speed-test-weekly-prod/aggregated/
+  # Per-host aggregation
+  host=home-primary/
+    year=2025/
+      week=2025W44/
+        speed_test_summary.json
+  
+  # Global aggregation
   year=2025/
     week=2025W44/
       speed_test_summary.json
@@ -188,6 +273,13 @@ s3://vd-speed-test-weekly-prod/aggregated/
 **Bucket:** `vd-speed-test-monthly-prod`
 ```
 s3://vd-speed-test-monthly-prod/aggregated/
+  # Per-host aggregation
+  host=home-primary/
+    year=2025/
+      month=202511/
+        speed_test_summary.json
+  
+  # Global aggregation
   year=2025/
     month=202511/
       speed_test_summary.json
@@ -197,7 +289,9 @@ s3://vd-speed-test-monthly-prod/aggregated/
 **Bucket:** `vd-speed-test-yearly-prod`
 ```
 s3://vd-speed-test-yearly-prod/aggregated/
-  year=2025/
+  # Per-host aggregation
+  host=home-primary/
+    year=2025/
     speed_test_summary.json
 ```
 

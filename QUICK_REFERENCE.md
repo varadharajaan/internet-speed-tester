@@ -29,6 +29,25 @@ Mode: [15-min ▼]  Period: [Last 7 days ▼]  [Apply]
 | **Monthly** | `?mode=monthly&days=12` | One point per month |
 | **Yearly** | `?mode=yearly&days=10` | One point per year |
 
+### Multi-Host Filtering
+
+| Filter | URL Parameter | Shows |
+|--------|---------------|-------|
+| **All Hosts** | (default) | Combined data from all hosts |
+| **Specific Host** | `?host=home-primary` | Only data from that host |
+
+**Example:** `?mode=weekly&days=52&host=home-primary`
+
+### Performance Parameters
+
+| Parameter | Example | Effect |
+|-----------|---------|--------|
+| **Async Load** | `?async=1` | Instant page load, data loads progressively |
+| **Force Refresh** | `?force_refresh=1` | Bypass 2-minute cache, get fresh data |
+| **Combined** | `?async=1&force_refresh=1` | Both features together |
+
+**Note:** Dashboard caches data for 2 minutes. Use `force_refresh=1` to get latest data immediately.
+
 ## 📊 Aggregation Levels Explained
 
 ```
@@ -76,11 +95,17 @@ API: /api/data?mode=monthly&days=12
 ## 📁 S3 Bucket Quick Access
 
 ```bash
-# List all weekly summaries
-aws s3 ls s3://vd-speed-test-weekly-prod/aggregated/ --recursive
+# List all weekly summaries (global)
+aws s3 ls s3://vd-speed-test-weekly-prod/aggregated/year=2025/ --recursive
+
+# List weekly summaries for specific host
+aws s3 ls s3://vd-speed-test-weekly-prod/aggregated/host=home-primary/year=2025/ --recursive
 
 # Download this week's summary
 aws s3 cp s3://vd-speed-test-weekly-prod/aggregated/year=2025/week=2025W44/speed_test_summary.json ./week44.json
+
+# Download host-specific summary
+aws s3 cp s3://vd-speed-test-weekly-prod/aggregated/host=home-primary/year=2025/week=2025W44/speed_test_summary.json ./host-week44.json
 
 # View monthly summaries
 aws s3 ls s3://vd-speed-test-monthly-prod/aggregated/ --recursive
@@ -109,6 +134,14 @@ aws s3 ls s3://vd-speed-test-monthly-prod/aggregated/ --recursive
 4. Click **Apply**
 5. Chart shows hourly breakdown
 
+### Example 4: Compare Performance Across Hosts
+1. Go to dashboard
+2. Select Host: **home-primary** (or any host)
+3. Select Mode: **Daily**
+4. Select Period: **Last 7 days**
+5. Click **Apply**
+6. Switch to different host and compare
+
 ## 🔔 Automated Schedules
 
 | When | What Happens |
@@ -125,6 +158,9 @@ aws s3 ls s3://vd-speed-test-monthly-prod/aggregated/ --recursive
 - **Use Monthly view** to compare seasonal variations
 - **Use Hourly view** to debug specific problem days
 - **Filter by connection type** in any view to compare Ethernet vs WiFi
+- **Filter by host** to isolate performance issues on specific machines
+- **Use "All Hosts"** to see overall network performance
+- **Use `async=1`** for instant page load with progressive data loading
 - **Adjust the "Expected Speed"** threshold per view for different standards
 
 ## 📞 Need Help?

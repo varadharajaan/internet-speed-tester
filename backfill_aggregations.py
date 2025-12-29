@@ -4,6 +4,26 @@ Backfill Historical Aggregations
 ---------------------------------
 Creates hourly, weekly, monthly, and yearly aggregations from historical data.
 
+EXECUTION ORDER (handled automatically by --all):
+  1. Hourly  - Raw minute data → Hourly summaries (independent)
+  2. Weekly  - Daily summaries → Weekly rollups (requires daily to exist)
+  3. Monthly - Daily summaries → Monthly rollups (requires daily to exist)
+  4. Yearly  - Monthly summaries → Yearly rollups (requires monthly first)
+
+NOTE: Daily aggregations are created by the Lambda function, not this script.
+      This script assumes daily summaries already exist in the main bucket.
+
+Data Flow:
+  Raw 15-min data ──┬──> Hourly (vd-speed-test-hourly-prod)
+                    │
+                    └──> Daily (vd-speed-test/aggregated/) [via Lambda]
+                              │
+                              ├──> Weekly (vd-speed-test-weekly-prod)
+                              │
+                              └──> Monthly (vd-speed-test-monthly-prod)
+                                        │
+                                        └──> Yearly (vd-speed-test-yearly-prod)
+
 Usage:
     python backfill_aggregations.py --all                    # Backfill all aggregation types
     python backfill_aggregations.py --hourly                 # Backfill hourly only
@@ -11,6 +31,10 @@ Usage:
     python backfill_aggregations.py --monthly                # Backfill monthly only
     python backfill_aggregations.py --yearly                 # Backfill yearly only
     python backfill_aggregations.py --hourly --weekly        # Multiple types
+    python backfill_aggregations.py --all --force            # Include incomplete periods
+    python backfill_aggregations.py --weekly --last 2        # Backfill only last 2 weeks
+    python backfill_aggregations.py --hourly --last 24       # Backfill only last 24 hours
+    python backfill_aggregations.py --all --skip-existing    # Skip if already exists in S3
 """
 import json, datetime, boto3, os, argparse
 from collections import Counter
@@ -33,9 +57,27 @@ TIMEZONE = pytz.timezone(config.get("timezone", "Asia/Kolkata"))
 
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
+# Manifest file for tracking backfill output
+BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "backfill_manifest.json")
+
+# Global skip-existing flag (set by args)
+SKIP_EXISTING = False
+
+
+def s3_key_exists(bucket: str, key: str) -> bool:
+    """Check if an S3 key already exists."""
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+        return True
+    except s3.exceptions.ClientError:
+        return False
+    except Exception:
+        return False
+
+
 def load_all_minute_data():
     """Load all minute-level data from S3."""
-    print("📥 Loading all minute-level data from S3...")
+    print("Loading all minute-level data from S3...")
     paginator = s3.get_paginator("list_objects_v2")
     minute_records = []
     
@@ -70,7 +112,7 @@ def load_all_minute_data():
 
 def load_all_daily_summaries():
     """Load all daily summaries from S3."""
-    print("📥 Loading all daily summaries from S3...")
+    print("Loading all daily summaries from S3...")
     paginator = s3.get_paginator("list_objects_v2")
     summaries = {}
     
@@ -89,7 +131,7 @@ def load_all_daily_summaries():
                     date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                     summaries[date] = data
             except Exception as e:
-                print(f"⚠️  Skip {key}: {e}")
+                print(f"WARNING: Skip {key}: {e}")
     
     print(f"Loaded {len(summaries)} daily summaries")
     return summaries
@@ -164,13 +206,20 @@ def aggregate_month(daily_summaries, year, month):
         "connection_types": unique_connection_types,
     }
 
-def backfill_weekly(daily_summaries, force=False):
-    """Create weekly aggregations for all weeks that have data."""
-    print("\n📅 Backfilling weekly aggregations...")
+def backfill_weekly(daily_summaries, force=False, last_n=None):
+    """Create weekly aggregations for all weeks that have data.
+    
+    Args:
+        daily_summaries: Dict of daily summaries keyed by date
+        force: Include incomplete current week
+        last_n: Only backfill last N weeks (None = all)
+    """
+    print(f"\nBackfilling weekly aggregations{' (last ' + str(last_n) + ')' if last_n else ''}...")
+    created_files = []
     
     if not daily_summaries:
-        print("❌ No daily summaries to process")
-        return
+        print("ERROR: No daily summaries to process")
+        return []
     
     dates = sorted(daily_summaries.keys())
     min_date = dates[0]
@@ -184,9 +233,15 @@ def backfill_weekly(daily_summaries, force=False):
     first_monday, _ = get_week_bounds(min_date)
     last_monday, _ = get_week_bounds(max_date)
     
+    # If --last is specified, limit to only last N weeks
+    if last_n is not None:
+        cutoff_monday = current_week_monday - datetime.timedelta(weeks=last_n)
+        first_monday = max(first_monday, cutoff_monday)
+    
     current_monday = first_monday
     weeks_created = 0
     weeks_skipped = 0
+    weeks_existed = 0
     
     while current_monday <= last_monday:
         _, sunday = get_week_bounds(current_monday)
@@ -197,14 +252,20 @@ def backfill_weekly(daily_summaries, force=False):
             current_monday += datetime.timedelta(days=7)
             continue
         
+        # Build key first to check if exists
+        week_label = f"{current_monday.strftime('%YW%W')}"
+        key = f"aggregated/year={current_monday.year}/week={week_label}/speed_test_summary.json"
+        
+        # Skip if already exists and --skip-existing is set
+        if SKIP_EXISTING and s3_key_exists(S3_BUCKET_WEEKLY, key):
+            weeks_existed += 1
+            current_monday += datetime.timedelta(days=7)
+            continue
+        
         # Aggregate this week
         week_summary = aggregate_week(daily_summaries, current_monday, sunday)
         
         if week_summary:
-            # Upload to S3
-            week_label = f"{current_monday.strftime('%YW%W')}"
-            key = f"aggregated/year={current_monday.year}/week={week_label}/speed_test_summary.json"
-            
             s3.put_object(
                 Bucket=S3_BUCKET_WEEKLY,
                 Key=key,
@@ -213,13 +274,17 @@ def backfill_weekly(daily_summaries, force=False):
             )
             
             weeks_created += 1
+            created_files.append({"bucket": S3_BUCKET_WEEKLY, "key": key, "type": "weekly"})
             print(f"SUCCESS: {current_monday} to {sunday} ({week_summary['days']} days) -> s3://{S3_BUCKET_WEEKLY}/{key}")
         
         current_monday += datetime.timedelta(days=7)
     
     if weeks_skipped > 0:
-        print(f"⏭️  Skipped {weeks_skipped} incomplete week(s). Use --force to include them.")
-    print(f"\n🎉 Created {weeks_created} weekly aggregations")
+        print(f"Skipped {weeks_skipped} incomplete week(s). Use --force to include them.")
+    if weeks_existed > 0:
+        print(f"Skipped {weeks_existed} week(s) that already exist.")
+    print(f"\nCreated {weeks_created} weekly aggregations")
+    return created_files
 
 def aggregate_hour(minute_records, target_hour):
     """Aggregate minute records for a specific hour."""
@@ -262,13 +327,20 @@ def aggregate_hour(minute_records, target_hour):
         "servers_top": top_servers,
     }
 
-def backfill_hourly(minute_records, force=False):
-    """Create hourly aggregations for all hours that have data."""
-    print("\n📅 Backfilling hourly aggregations...")
+def backfill_hourly(minute_records, force=False, last_n=None):
+    """Create hourly aggregations for all hours that have data.
+    
+    Args:
+        minute_records: List of minute-level data records
+        force: Include incomplete current hour
+        last_n: Only backfill last N hours (None = all)
+    """
+    print(f"\nBackfilling hourly aggregations{' (last ' + str(last_n) + ')' if last_n else ''}...")
+    created_files = []
     
     if not minute_records:
-        print("❌ No minute records to process")
-        return
+        print("ERROR: No minute records to process")
+        return []
     
     # Get current time
     now = datetime.datetime.now(TIMEZONE)
@@ -281,8 +353,15 @@ def backfill_hourly(minute_records, force=False):
         hours.add(hour)
     
     hours = sorted(hours)
+    
+    # If --last is specified, limit to only last N hours
+    if last_n is not None:
+        cutoff_hour = current_hour - datetime.timedelta(hours=last_n)
+        hours = [h for h in hours if h >= cutoff_hour]
+    
     hours_created = 0
     hours_skipped = 0
+    hours_existed = 0
     
     for hour in hours:
         # Skip current incomplete hour unless --force is used
@@ -290,16 +369,20 @@ def backfill_hourly(minute_records, force=False):
             hours_skipped += 1
             continue
         
+        year = hour.year
+        month = hour.strftime("%Y%m")
+        day = hour.strftime("%Y%m%d")
+        hour_str = hour.strftime("%H")
+        key = f"aggregated/year={year}/month={month}/day={day}/hour={hour_str}/speed_test_summary.json"
+        
+        # Skip if already exists and --skip-existing is set
+        if SKIP_EXISTING and s3_key_exists(S3_BUCKET_HOURLY, key):
+            hours_existed += 1
+            continue
+        
         hour_summary = aggregate_hour(minute_records, hour)
         
         if hour_summary:
-            year = hour.year
-            month = hour.strftime("%Y%m")
-            day = hour.strftime("%Y%m%d")
-            hour_str = hour.strftime("%H")
-            
-            key = f"aggregated/year={year}/month={month}/day={day}/hour={hour_str}/speed_test_summary.json"
-            
             s3.put_object(
                 Bucket=S3_BUCKET_HOURLY,
                 Key=key,
@@ -308,20 +391,31 @@ def backfill_hourly(minute_records, force=False):
             )
             
             hours_created += 1
+            created_files.append({"bucket": S3_BUCKET_HOURLY, "key": key, "type": "hourly"})
             if hours_created % 20 == 0:  # Progress indicator
                 print(f"   ... {hours_created} hours processed")
     
     if hours_skipped > 0:
-        print(f"⏭️  Skipped {hours_skipped} incomplete hour(s). Use --force to include them.")
-    print(f"\n🎉 Created {hours_created} hourly aggregations")
+        print(f"Skipped {hours_skipped} incomplete hour(s). Use --force to include them.")
+    if hours_existed > 0:
+        print(f"Skipped {hours_existed} hour(s) that already exist.")
+    print(f"\nCreated {hours_created} hourly aggregations")
+    return created_files
 
-def backfill_monthly(daily_summaries, force=False):
-    """Create monthly aggregations for all months that have data."""
-    print("\n📅 Backfilling monthly aggregations...")
+def backfill_monthly(daily_summaries, force=False, last_n=None):
+    """Create monthly aggregations for all months that have data.
+    
+    Args:
+        daily_summaries: Dict of daily summaries keyed by date
+        force: Include incomplete current month
+        last_n: Only backfill last N months (None = all)
+    """
+    print(f"\nBackfilling monthly aggregations{' (last ' + str(last_n) + ')' if last_n else ''}...")
+    created_files = []
     
     if not daily_summaries:
-        print("❌ No daily summaries to process")
-        return
+        print("ERROR: No daily summaries to process")
+        return []
     
     dates = sorted(daily_summaries.keys())
     
@@ -336,8 +430,19 @@ def backfill_monthly(daily_summaries, force=False):
         months.add((date.year, date.month))
     
     months = sorted(months)
+    
+    # If --last is specified, limit to only last N months
+    if last_n is not None:
+        cutoff_year = current_year
+        cutoff_month = current_month - last_n
+        while cutoff_month <= 0:
+            cutoff_month += 12
+            cutoff_year -= 1
+        months = [(y, m) for y, m in months if (y * 100 + m) >= (cutoff_year * 100 + cutoff_month)]
+    
     months_created = 0
     months_skipped = 0
+    months_existed = 0
     
     for year, month in months:
         # Skip current incomplete month unless --force is used
@@ -345,12 +450,17 @@ def backfill_monthly(daily_summaries, force=False):
             months_skipped += 1
             continue
         
+        month_tag = f"{year}{month:02d}"
+        key = f"aggregated/year={year}/month={month_tag}/speed_test_summary.json"
+        
+        # Skip if already exists and --skip-existing is set
+        if SKIP_EXISTING and s3_key_exists(S3_BUCKET_MONTHLY, key):
+            months_existed += 1
+            continue
+        
         month_summary = aggregate_month(daily_summaries, year, month)
         
         if month_summary:
-            month_tag = month_summary["month"]
-            key = f"aggregated/year={year}/month={month_tag}/speed_test_summary.json"
-            
             s3.put_object(
                 Bucket=S3_BUCKET_MONTHLY,
                 Key=key,
@@ -359,19 +469,31 @@ def backfill_monthly(daily_summaries, force=False):
             )
             
             months_created += 1
+            created_files.append({"bucket": S3_BUCKET_MONTHLY, "key": key, "type": "monthly"})
             print(f"SUCCESS: {year}-{month:02d} ({month_summary['days']} days) -> s3://{S3_BUCKET_MONTHLY}/{key}")
     
     if months_skipped > 0:
         print(f"Skipped {months_skipped} incomplete month(s). Use --force to include them.")
+    if months_existed > 0:
+        print(f"Skipped {months_existed} month(s) that already exist.")
     print(f"\nCreated {months_created} monthly aggregations")
+    return created_files
 
-def backfill_yearly(monthly_summaries, force=False):
-    """Create yearly aggregations from monthly data."""
-    print("\nBackfilling yearly aggregations...")
+
+def backfill_yearly(monthly_summaries, force=False, last_n=None):
+    """Create yearly aggregations from monthly data.
+    
+    Args:
+        monthly_summaries: Dict of monthly summaries keyed by (year, month)
+        force: Include incomplete current year
+        last_n: Only backfill last N years (None = all)
+    """
+    print(f"\nBackfilling yearly aggregations{' (last ' + str(last_n) + ')' if last_n else ''}...")
+    created_files = []
     
     if not monthly_summaries:
-        print("❌ No monthly summaries to process")
-        return
+        print("ERROR: No monthly summaries to process")
+        return []
     
     # Get current year
     today = datetime.datetime.now(TIMEZONE).date()
@@ -384,8 +506,14 @@ def backfill_yearly(monthly_summaries, force=False):
             years[year] = []
         years[year].append(data)
     
+    # If --last is specified, limit to only last N years
+    if last_n is not None:
+        cutoff_year = current_year - last_n + 1
+        years = {y: d for y, d in years.items() if y >= cutoff_year}
+    
     years_created = 0
     years_skipped = 0
+    years_existed = 0
     
     for year, year_data in sorted(years.items()):
         if not year_data:
@@ -394,6 +522,13 @@ def backfill_yearly(monthly_summaries, force=False):
         # Skip current incomplete year unless --force is used
         if not force and year == current_year:
             years_skipped += 1
+            continue
+        
+        key = f"aggregated/year={year}/speed_test_summary.json"
+        
+        # Skip if already exists and --skip-existing is set
+        if SKIP_EXISTING and s3_key_exists(S3_BUCKET_YEARLY, key):
+            years_existed += 1
             continue
         
         all_connection_types = []
@@ -410,8 +545,6 @@ def backfill_yearly(monthly_summaries, force=False):
             "connection_types": top_connection_types,
         }
         
-        key = f"aggregated/year={year}/speed_test_summary.json"
-        
         s3.put_object(
             Bucket=S3_BUCKET_YEARLY,
             Key=key,
@@ -420,13 +553,19 @@ def backfill_yearly(monthly_summaries, force=False):
         )
         
         years_created += 1
+        created_files.append({"bucket": S3_BUCKET_YEARLY, "key": key, "type": "yearly"})
         print(f"SUCCESS: {year} ({year_summary['months_aggregated']} months) -> s3://{S3_BUCKET_YEARLY}/{key}")
     
     if years_skipped > 0:
-        print(f"⏭️  Skipped {years_skipped} incomplete year(s). Use --force to include them.")
-    print(f"\n🎉 Created {years_created} yearly aggregations")
+        print(f"Skipped {years_skipped} incomplete year(s). Use --force to include them.")
+    if years_existed > 0:
+        print(f"Skipped {years_existed} year(s) that already exist.")
+    print(f"\nCreated {years_created} yearly aggregations")
+    return created_files
 
 def main():
+    global SKIP_EXISTING
+    
     parser = argparse.ArgumentParser(
         description="Backfill historical aggregations from existing data",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -435,7 +574,11 @@ Examples:
   python backfill_aggregations.py --all
   python backfill_aggregations.py --hourly --weekly
   python backfill_aggregations.py --monthly --yearly
-  python backfill_aggregations.py --all --force  # Include incomplete periods
+  python backfill_aggregations.py --all --force           # Include incomplete periods
+  python backfill_aggregations.py --weekly --last 2       # Backfill only last 2 weeks
+  python backfill_aggregations.py --hourly --last 24      # Backfill only last 24 hours
+  python backfill_aggregations.py --monthly --last 3      # Backfill only last 3 months
+  python backfill_aggregations.py --all --skip-existing   # Skip if already exists in S3
         """
     )
     
@@ -445,8 +588,13 @@ Examples:
     parser.add_argument("--monthly", action="store_true", help="Backfill monthly aggregations from daily data")
     parser.add_argument("--yearly", action="store_true", help="Backfill yearly aggregations from monthly data")
     parser.add_argument("--force", action="store_true", help="Include incomplete periods (current hour/week/month/year)")
+    parser.add_argument("--last", type=int, metavar="N", help="Only backfill last N periods (e.g., --last 2 for last 2 weeks/months)")
+    parser.add_argument("--skip-existing", action="store_true", help="Skip periods that already have data in S3")
     
     args = parser.parse_args()
+    
+    # Set global skip-existing flag
+    SKIP_EXISTING = args.skip_existing
     
     # If no flags specified or --all, do everything
     if args.all or not (args.hourly or args.weekly or args.monthly or args.yearly):
@@ -464,20 +612,26 @@ Examples:
         print(f"  Monthly bucket: {S3_BUCKET_MONTHLY}")
     if args.yearly:
         print(f"  Yearly bucket:  {S3_BUCKET_YEARLY}")
+    if args.last:
+        print(f"  Limiting to:    Last {args.last} period(s)")
+    if args.skip_existing:
+        print(f"  Skip existing:  Yes (will not overwrite)")
     print("=" * 80)
     
     minute_records = None
     daily_summaries = None
     monthly_summaries = None
+    all_created_files = []
     
     # Hourly aggregations
     if args.hourly:
         print("\n[HOURLY] Backfilling hourly aggregations...")
         minute_records = load_all_minute_data()
         if minute_records:
-            backfill_hourly(minute_records, force=args.force)
+            hourly_files = backfill_hourly(minute_records, force=args.force, last_n=args.last)
+            all_created_files.extend(hourly_files if hourly_files else [])
         else:
-            print("⚠️  No minute data found, skipping hourly aggregations")
+            print("WARNING: No minute data found, skipping hourly aggregations")
     
     # Weekly aggregations
     if args.weekly:
@@ -485,9 +639,10 @@ Examples:
         if daily_summaries is None:
             daily_summaries = load_all_daily_summaries()
         if daily_summaries:
-            backfill_weekly(daily_summaries, force=args.force)
+            weekly_files = backfill_weekly(daily_summaries, force=args.force, last_n=args.last)
+            all_created_files.extend(weekly_files if weekly_files else [])
         else:
-            print("⚠️  No daily summaries found, skipping weekly aggregations")
+            print("WARNING: No daily summaries found, skipping weekly aggregations")
     
     # Monthly aggregations
     if args.monthly:
@@ -496,37 +651,25 @@ Examples:
             daily_summaries = load_all_daily_summaries()
         
         if daily_summaries:
-            # Get current month info
-            today = datetime.datetime.now(TIMEZONE).date()
-            current_year = today.year
-            current_month = today.month
+            monthly_files = backfill_monthly(daily_summaries, force=args.force, last_n=args.last)
+            all_created_files.extend(monthly_files if monthly_files else [])
             
-            dates = sorted(daily_summaries.keys())
-            months = set()
-            for date in dates:
-                months.add((date.year, date.month))
-            
-            monthly_summaries = {}
-            for year, month in sorted(months):
-                # Skip current incomplete month unless --force is used
-                if not args.force and year == current_year and month == current_month:
-                    continue
-                
-                month_summary = aggregate_month(daily_summaries, year, month)
-                if month_summary:
-                    monthly_summaries[(year, month)] = month_summary
-                    month_tag = month_summary["month"]
-                    key = f"aggregated/year={year}/month={month_tag}/speed_test_summary.json"
-                    
-                    s3.put_object(
-                        Bucket=S3_BUCKET_MONTHLY,
-                        Key=key,
-                        Body=json.dumps(month_summary, indent=2),
-                        ContentType="application/json",
-                    )
-                    print(f"SUCCESS: {year}-{month:02d} ({month_summary['days']} days) -> s3://{S3_BUCKET_MONTHLY}/{key}")
-            
-            print(f"\nCreated {len(monthly_summaries)} monthly aggregations")
+            # Build monthly_summaries dict for yearly (if needed later)
+            if args.yearly:
+                today = datetime.datetime.now(TIMEZONE).date()
+                current_year = today.year
+                current_month = today.month
+                dates = sorted(daily_summaries.keys())
+                months = set()
+                for date in dates:
+                    months.add((date.year, date.month))
+                monthly_summaries = {}
+                for year, month in sorted(months):
+                    if not args.force and year == current_year and month == current_month:
+                        continue
+                    month_summary = aggregate_month(daily_summaries, year, month)
+                    if month_summary:
+                        monthly_summaries[(year, month)] = month_summary
         else:
             print("WARNING: No daily summaries found, skipping monthly aggregations")
     
@@ -536,7 +679,7 @@ Examples:
         
         # Load monthly summaries if not already loaded
         if monthly_summaries is None:
-            print("📥 Loading existing monthly summaries from S3...")
+            print("Loading existing monthly summaries from S3...")
             monthly_summaries = {}
             paginator = s3.get_paginator("list_objects_v2")
             
@@ -554,17 +697,28 @@ Examples:
                             month = int(month_str[4:6])
                             monthly_summaries[(year, month)] = data
                     except Exception as e:
-                        print(f"⚠️  Skip {key}: {e}")
+                        print(f"WARNING: Skip {key}: {e}")
             
             print(f"Loaded {len(monthly_summaries)} monthly summaries")
         
         if monthly_summaries:
-            backfill_yearly(monthly_summaries, force=args.force)
+            yearly_files = backfill_yearly(monthly_summaries, force=args.force, last_n=args.last)
+            all_created_files.extend(yearly_files if yearly_files else [])
         else:
-            print("⚠️  No monthly summaries found, skipping yearly aggregations")
+            print("WARNING: No monthly summaries found, skipping yearly aggregations")
+    
+    # Save manifest of created files
+    manifest = {
+        "timestamp": datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "files_created": len(all_created_files),
+        "files": all_created_files,
+    }
+    with open(BACKFILL_MANIFEST_PATH, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
     
     print("\n" + "=" * 80)
-    print("  BACKFILL COMPLETE!")
+    print(f"  BACKFILL COMPLETE! Created {len(all_created_files)} files.")
+    print(f"  Manifest saved to: {BACKFILL_MANIFEST_PATH}")
     print("=" * 80)
 
 if __name__ == "__main__":

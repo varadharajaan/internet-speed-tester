@@ -92,13 +92,20 @@ export S3_BUCKET_YEARLY="my-yearly-bucket"
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Data Collection Layer                     │
-│  speed_collector.py → S3_BUCKET (minute-level data)         │
+│  speed_collector.py (Host A) ─┐                              │
+│  speed_collector.py (Host B) ─┼→ S3_BUCKET (minute-level)   │
+│  speed_collector.py (Host C) ─┘                              │
+│                                                              │
+│  Key Format: host={host_id}/year=YYYY/month=MM/day=DD/...   │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Daily Aggregation Layer                     │
 │  lambda_function.py → S3_BUCKET (daily summaries)           │
+│                                                              │
+│  Per-Host: aggregated/host={host_id}/year=YYYY/month=MM/... │
+│  Global:   aggregated/year=YYYY/month=MM/day=DD/...         │
 └──────────────────────┬──────────────────────────────────────┘
                        │
             ┌──────────┴──────────┬──────────────┐
@@ -107,9 +114,38 @@ export S3_BUCKET_YEARLY="my-yearly-bucket"
    │ S3_BUCKET_WEEKLY│   │S3_BUCKET_   │   │ S3_BUCKET_   │
    │                 │   │MONTHLY      │   │ YEARLY       │
    │ Weekly Rollup   │   │Monthly      │   │Yearly Rollup │
-   └─────────────────┘   │Rollup       │   └──────────────┘
+   │ (per-host +     │   │Rollup       │   │(per-host +   │
+   │  global)        │   │(per-host +  │   │ global)      │
+   └─────────────────┘   │ global)     │   └──────────────┘
                          └─────────────┘
 ```
+
+## Multi-Host S3 Key Structure
+
+When running multiple speed collectors, each host stores data with its unique prefix:
+
+### Minute-Level Data (S3_BUCKET)
+```
+host={host_id}/year={YYYY}/month={MM}/day={DD}/hour={HH}/minute={mm}_{timestamp}.json
+```
+
+Example paths:
+```
+host=home-primary/year=2025/month=01/day=15/hour=14/minute=30_1705323000000.json
+host=office-backup/year=2025/month=01/day=15/hour=14/minute=30_1705323000000.json
+```
+
+### Daily Aggregated Data (S3_BUCKET)
+```
+# Per-host aggregation
+aggregated/host={host_id}/year={YYYY}/month={MM}/day={DD}/summary.json
+
+# Global aggregation (all hosts combined)
+aggregated/year={YYYY}/month={MM}/day={DD}/summary.json
+```
+
+### Weekly/Monthly/Yearly Aggregations
+Same pattern applies to all rollup buckets with `host=` prefix for per-host summaries.
 
 ## Lambda Handler Modes
 

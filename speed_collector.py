@@ -5,11 +5,6 @@ from functools import wraps
 import platform
 import re
 
-try:
-    import speedtest as stlib
-except Exception:
-    stlib = None
-
 # ===============================
 # CONFIGURATION FROM config.json
 # ===============================
@@ -49,6 +44,12 @@ LOG_MAX_BYTES = config.get("log_max_bytes")
 LOG_BACKUP_COUNT = config.get("log_backup_count")
 SPEEDTEST_TIMEOUT = config.get("speedtest_timeout")
 PUBLIC_IP_API = config.get("public_ip_api")
+
+# Multi-host configuration
+HOST_ID = os.getenv("HOST_ID", config.get("host_id", "default"))
+HOST_NAME = os.getenv("HOST_NAME", config.get("host_name", HOST_ID))
+HOST_LOCATION = os.getenv("HOST_LOCATION", config.get("host_location", ""))
+HOST_ISP = os.getenv("HOST_ISP", config.get("host_isp", ""))
 
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
@@ -357,10 +358,19 @@ def run_ookla_cli():
 # AWS UPLOAD
 # ===============================
 def upload_to_s3(rec, source_label, rounded_ist):
+    """Upload speed test result to S3 with host-prefixed key structure."""
     year, month, day, hour, minute = ist_parts(rounded_ist)
-    key = f"year={year}/month={month}/day={day}/hour={hour}/minute={minute}/speed_data_{source_label}_{minute}_{int(time.time())}.json"
+    
+    # Add host metadata to the record
+    rec["host_id"] = HOST_ID
+    rec["host_name"] = HOST_NAME
+    rec["host_location"] = HOST_LOCATION
+    rec["host_isp"] = HOST_ISP
+    
+    # Use host-prefixed S3 key for multi-host support
+    key = f"host={HOST_ID}/year={year}/month={month}/day={day}/hour={hour}/minute={minute}/speed_data_{source_label}_{minute}_{int(time.time())}.json"
     s3.put_object(Bucket=S3_BUCKET, Key=key, Body=json.dumps(rec, indent=2), ContentType="application/json")
-    log.info(f"Uploaded to s3://{S3_BUCKET}/{key}")
+    log.info(f"[{HOST_ID}] Uploaded to s3://{S3_BUCKET}/{key}")
 
 # ===============================
 # MAIN TASK

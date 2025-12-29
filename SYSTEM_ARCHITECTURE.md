@@ -1,23 +1,27 @@
 # Speed Test System Architecture
 
-## 📡 Data Flow
+## 📡 Data Flow (Multi-Host Architecture)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       INTERNET SPEED TEST SYSTEM                     │
+│               INTERNET SPEED TEST SYSTEM (Multi-Host)               │
 └─────────────────────────────────────────────────────────────────────┘
 
-┌───────────────┐
-│ speed_        │  Every 15 minutes
-│ collector.py  │──────────────┐
-└───────────────┘              │
-                               ▼
-                    ┌─────────────────────┐
-                    │  S3: vd-speed-test  │
-                    │  /raw/year=/month=/ │
-                    │  /day=/hour=/       │
-                    │  minute=/test.json  │
-                    └─────────────────────┘
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│ Host: home-   │   │ Host: office- │   │ Host: backup- │
+│ primary       │   │ main          │   │ location      │
+│ collector.py  │   │ collector.py  │   │ collector.py  │
+└───────┬───────┘   └───────┬───────┘   └───────┬───────┘
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            ▼
+                 ┌─────────────────────────┐
+                 │     S3: vd-speed-test   │
+                 │  /host={host_id}/       │
+                 │    /year=/month=/day=/  │
+                 │      /hour=/minute=/    │
+                 │        test.json        │
+                 └─────────────────────────┘
                                │
                     ┌──────────┴──────────┐
                     ▼                     ▼
@@ -60,42 +64,67 @@
                               └───────────────────┘
 ```
 
-## 🗂️ S3 Bucket Structure
+## 🗂️ S3 Bucket Structure (Multi-Host)
 
 ```
 vd-speed-test/                          # Main bucket (Daily aggregations)
-├── raw/                                # Raw 15-min test data
-│   └── year=2025/
-│       └── month=202511/
-│           └── day=20251103/
-│               └── hour=2025110312/
-│                   └── minute=202511031215/
-│                       └── test_20251103121532.json
 │
-└── aggregated/                         # Daily summaries
+├── host=home-primary/                  # Per-host raw data
+│   └── year=2025/
+│       └── month=202512/
+│           └── day=20251229/
+│               └── hour=2025122914/
+│                   └── minute=00/
+│                       └── speed_data_ookla_00_1735467234.json
+│
+├── host=office-main/                   # Another host's data
+│   └── year=2025/
+│       └── ... (same structure)
+│
+├── aggregated/                         # Global summaries (all hosts)
+│   └── year=2025/
+│       └── month=202512/
+│           └── day=20251229/
+│               └── speed_test_summary.json
+│
+└── aggregated/host=home-primary/       # Per-host summaries
     └── year=2025/
-        └── month=202511/
-            └── day=20251103/
+        └── month=202512/
+            └── day=20251229/
                 └── speed_test_summary.json
 
 vd-speed-test-hourly-prod/              # Hourly aggregations
-└── aggregated/
+├── aggregated/                         # Global hourly (all hosts)
+│   └── year=2025/
+│       └── month=202512/
+│           └── day=20251229/
+│               └── hour=2025122914/
+│                   └── speed_test_summary.json
+│
+└── aggregated/host=home-primary/       # Per-host hourly
     └── year=2025/
-        └── month=202511/
-            └── day=20251103/
-                └── hour=2025110312/
-                    └── speed_test_summary.json
+        └── ... (same structure)
 
 vd-speed-test-weekly-prod/              # Weekly aggregations
-└── aggregated/
+├── aggregated/                         # Global weekly
+│   └── year=2025/
+│       └── week=2025W52/               # ISO week format
+│           └── speed_test_summary.json
+│
+└── aggregated/host=home-primary/       # Per-host weekly
     └── year=2025/
-        └── week=2025W44/                # ISO week format
+        └── week=2025W52/
             └── speed_test_summary.json
 
 vd-speed-test-monthly-prod/             # Monthly aggregations
-└── aggregated/
+├── aggregated/                         # Global monthly
+│   └── year=2025/
+│       └── month=202512/
+│           └── speed_test_summary.json
+│
+└── aggregated/host=home-primary/       # Per-host monthly
     └── year=2025/
-        └── month=202511/
+        └── month=202512/
             └── speed_test_summary.json
 
 vd-speed-test-yearly-prod/              # Yearly aggregations
@@ -323,4 +352,105 @@ Step 3: View JSON response with hour-by-hour breakdown
 ║  🎯 Just use the mode dropdown in your dashboard!                  ║
 ║                                                                     ║
 ╚═══════════════════════════════════════════════════════════════════╝
+```
+
+## ⚡ Performance Optimizations
+
+### In-Memory Caching (DataCache)
+
+The dashboard implements a smart caching layer to reduce S3 API calls:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     DataCache System                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Cache Key Format:                                           │
+│  "{data_type}_{host_id}_{mode}_{days}"                       │
+│                                                               │
+│  TTL (Time-To-Live): 120 seconds (2 minutes)                │
+│                                                               │
+│  Example Keys:                                                │
+│  • "daily_home-primary_daily_30"                             │
+│  • "minute_all_minute_7"                                     │
+│  • "weekly_office_weekly_52"                                 │
+│                                                               │
+│  Force Refresh: Add force_refresh=1 to bypass cache         │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Reduces S3 API costs
+- Sub-second response for cached data
+- Automatic expiry after 2 minutes for fresh data
+- Per-host cache isolation
+
+### Parallel S3 Fetches (ThreadPoolExecutor)
+
+All S3 data loading uses parallel execution:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Parallel Data Loading                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Before (Sequential):                                        │
+│  Day 1 → Day 2 → Day 3 → ... → Day 30  (30 seconds)        │
+│                                                               │
+│  After (Parallel with 20-50 threads):                       │
+│  Day 1 ─┐                                                    │
+│  Day 2 ─┼─→ All complete in ~2 seconds                      │
+│  Day 3 ─┤                                                    │
+│  ...    │                                                    │
+│  Day 30 ┘                                                    │
+│                                                               │
+│  Thread Pools:                                               │
+│  • Daily/Minute data: 20 threads                            │
+│  • Hourly data: 50 threads                                  │
+│  • Weekly/Monthly/Yearly: 20 threads                        │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Async Loading Mode (async=1)
+
+For instant page load with progressive data:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Async Loading Flow                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. User visits: /?async=1&mode=daily&days=30               │
+│                                                               │
+│  2. Server returns immediately:                              │
+│     • HTML skeleton with loading spinners                   │
+│     • JavaScript to fetch data                               │
+│                                                               │
+│  3. Browser fetches: /api/dashboard?mode=daily&days=30      │
+│                                                               │
+│  4. Data loads progressively:                                │
+│     • Charts populate                                        │
+│     • Statistics appear                                      │
+│     • Tables fill in                                         │
+│                                                               │
+│  Benefits:                                                   │
+│  • Instant page render (< 100ms)                            │
+│  • No browser timeout                                        │
+│  • Better user experience                                    │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**URL Examples:**
+```
+# Standard load (waits for all data)
+/?mode=daily&days=30
+
+# Async load (instant page, progressive data)
+/?mode=daily&days=30&async=1
+
+# Force refresh cache with async
+/?mode=daily&days=30&async=1&force_refresh=1
 ```

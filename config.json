@@ -1,4 +1,8 @@
 {
+  "host_id": "home-primary",
+  "host_name": "Home Primary",
+  "host_location": "Mumbai, India",
+  "host_isp": "Jio Fiber",
   "expected_speed_mbps": 200,
   "tolerance_percent": 10,
   "connection_type_thresholds": {

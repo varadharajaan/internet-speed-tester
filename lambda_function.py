@@ -103,6 +103,38 @@ except AttributeError:
 # --- AWS Client ---------------------------------------------------------------
 s3 = boto3.client("s3", region_name=AWS_REGION1)
 
+# --- Multi-host support -------------------------------------------------------
+def list_hosts() -> list:
+    """
+    Discover all unique host IDs from the S3 bucket by scanning top-level prefixes.
+    Returns a list of host_id strings (e.g., ['home-primary', 'office-backup']).
+    Also checks for legacy data without host prefix.
+    """
+    hosts = set()
+    
+    # Check for host= prefixes (new format)
+    try:
+        result = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix="host=", Delimiter="/")
+        for prefix in result.get("CommonPrefixes", []):
+            # prefix["Prefix"] is like "host=home-primary/"
+            host_prefix = prefix["Prefix"]
+            if host_prefix.startswith("host=") and host_prefix.endswith("/"):
+                host_id = host_prefix[5:-1]  # Extract "home-primary" from "host=home-primary/"
+                hosts.add(host_id)
+    except Exception as e:
+        log.warning(f"Error listing host prefixes: {e}")
+    
+    # Check for legacy data (year= prefix without host)
+    try:
+        result = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix="year=", Delimiter="/", MaxKeys=1)
+        if result.get("CommonPrefixes") or result.get("Contents"):
+            hosts.add("_legacy")  # Special marker for legacy data
+    except Exception as e:
+        log.warning(f"Error checking legacy data: {e}")
+    
+    log.info(f"Discovered hosts: {sorted(hosts)}")
+    return sorted(hosts)
+
 # --- Custom JSON Logger -------------------------------------------------------
 class CustomLogger:
     def __init__(self, name=__name__, level=LOG_LEVEL):
@@ -167,15 +199,25 @@ def log_execution(func):
     return wrapper
 
 # --- Helpers ------------------------------------------------------------------
-def list_objects(prefix: str):
+def list_objects(prefix: str, bucket: str = None):
+    """List all objects with given prefix from specified bucket (default: S3_BUCKET)."""
+    target_bucket = bucket or S3_BUCKET
     paginator = s3.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+    for page in paginator.paginate(Bucket=target_bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             yield obj["Key"]
 
-def read_json(key: str) -> dict:
-    obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+def read_json(key: str, bucket: str = None) -> dict:
+    """Read and parse JSON from S3."""
+    target_bucket = bucket or S3_BUCKET
+    obj = s3.get_object(Bucket=target_bucket, Key=key)
     return json.loads(obj["Body"].read().decode("utf-8"))
+
+def get_host_prefix(host_id: str) -> str:
+    """Get the S3 prefix for a host. Legacy data has no host prefix."""
+    if host_id == "_legacy":
+        return ""
+    return f"host={host_id}/"
 
 def parse_float(value):
     if isinstance(value, str):
@@ -286,18 +328,24 @@ def emit_success_event(mode: str, date: str = None):
 
 # --- Daily aggregation ---------------------------------------------------------
 @log_execution
-def aggregate_for_date(target_dt: datetime.datetime):
-    """Aggregate all speed test results for the given IST date."""
+def aggregate_for_date(target_dt: datetime.datetime, host_id: str = None):
+    """
+    Aggregate all speed test results for the given IST date.
+    If host_id is provided, only aggregate for that host.
+    """
     year = target_dt.strftime("%Y")
     month = target_dt.strftime("%Y%m")
     day = target_dt.strftime("%Y%m%d")
-    prefix = f"year={year}/month={month}/day={day}/"
-    log.info(f"Scanning prefix: {prefix}")
+    
+    host_prefix = get_host_prefix(host_id) if host_id else ""
+    prefix = f"{host_prefix}year={year}/month={month}/day={day}/"
+    log.info(f"Scanning prefix: {prefix}" + (f" for host={host_id}" if host_id else " (all hosts)"))
 
     downloads, uploads, pings = [], [], []
     servers, result_urls = [], []
     ips = set()
     connection_types = []
+    hosts_seen = set()
     count = 0
     errors_count = 0
 
@@ -318,6 +366,10 @@ def aggregate_for_date(target_dt: datetime.datetime):
             uploads.append(ul)
             pings.append(ping)
             count += 1
+
+            # Track host information
+            rec_host = rec.get("host_id", "_legacy")
+            hosts_seen.add(rec_host)
 
             s_name = (rec.get("server_name") or "").strip()
             s_host = (rec.get("server_host") or "").strip()
@@ -346,7 +398,7 @@ def aggregate_for_date(target_dt: datetime.datetime):
             errors_count += 1
 
     if count == 0:
-        log.warning(f"No data found for date {day}")
+        log.warning(f"No data found for date {day}" + (f" host={host_id}" if host_id else ""))
         return None
 
     anomalies = detect_anomalies(downloads, uploads, pings, connection_types)
@@ -369,6 +421,8 @@ def aggregate_for_date(target_dt: datetime.datetime):
 
     summary = {
         "date_ist": target_dt.strftime("%Y-%m-%d"),
+        "host_id": host_id or "all",
+        "hosts_in_data": sorted(list(hosts_seen)),
         "records": count,
         "completion_rate": round(completion_rate, 1),
         "errors": errors_count,
@@ -386,16 +440,21 @@ def aggregate_for_date(target_dt: datetime.datetime):
         "connection_type_thresholds": CONNECTION_TYPE_THRESHOLDS,
     }
 
-    log.info(f"Aggregated {count} records for {day} with {len(anomalies)} anomalies")
+    log.info(f"Aggregated {count} records for {day}" + (f" host={host_id}" if host_id else "") + f" with {len(anomalies)} anomalies")
     return summary
 
 @log_execution
-def upload_summary(summary: dict, target_dt: datetime.datetime) -> str:
-    """Upload the daily summary JSON back to S3."""
+def upload_summary(summary: dict, target_dt: datetime.datetime, host_id: str = None) -> str:
+    """Upload the daily summary JSON back to S3, with optional host prefix."""
     year = target_dt.strftime("%Y")
     month = target_dt.strftime("%Y%m")
     day = target_dt.strftime("%Y%m%d")
-    key = f"aggregated/year={year}/month={month}/day={day}/speed_test_summary.json"
+    
+    # Add host prefix for per-host summaries
+    if host_id and host_id != "all":
+        key = f"aggregated/host={host_id}/year={year}/month={month}/day={day}/speed_test_summary.json"
+    else:
+        key = f"aggregated/year={year}/month={month}/day={day}/speed_test_summary.json"
 
     s3.put_object(
         Bucket=S3_BUCKET,
@@ -409,7 +468,8 @@ def upload_summary(summary: dict, target_dt: datetime.datetime) -> str:
 @log_execution
 def run_daily(custom_date: str = None):
     """
-    Run daily aggregation. If custom_date (YYYY-MM-DD) is provided, aggregate for that day.
+    Run daily aggregation for all hosts. Creates per-host summaries and a global summary.
+    If custom_date (YYYY-MM-DD) is provided, aggregate for that day.
     Otherwise, aggregate for the previous IST day.
     """
     if custom_date:
@@ -426,52 +486,70 @@ def run_daily(custom_date: str = None):
     target_dt = datetime.datetime.combine(target_date, datetime.time.min).replace(tzinfo=TIMEZONE)
     log.info(f"Aggregating for {target_dt.strftime('%Y-%m-%d')} IST")
 
-    summary = aggregate_for_date(target_dt)
-    if not summary:
-        log.error("No records found for aggregation")
+    # Discover all hosts and aggregate for each
+    hosts = list_hosts()
+    all_results = []
+    total_records = 0
+    
+    for host_id in hosts:
+        log.info(f"Aggregating daily data for host: {host_id}")
+        summary = aggregate_for_date(target_dt, host_id=host_id)
+        if summary:
+            key = upload_summary(summary, target_dt, host_id=host_id)
+            all_results.append({"host_id": host_id, "records": summary["records"], "s3_key": key})
+            total_records += summary["records"]
+    
+    # Also create a global summary across all hosts (for backward compatibility)
+    log.info("Creating global summary across all hosts")
+    global_summary = aggregate_for_date(target_dt, host_id=None)
+    if global_summary:
+        global_key = upload_summary(global_summary, target_dt, host_id="all")
+        all_results.append({"host_id": "all", "records": global_summary["records"], "s3_key": global_key})
+    
+    if not all_results:
+        log.error("No records found for aggregation across any host")
         return {"message": "No records found", "records": 0}
 
-    key = upload_summary(summary, target_dt)
     result = {
         "message": "Daily aggregation complete",
-        "records": summary["records"],
-        "completion_rate": summary["completion_rate"],
-        "errors": summary["errors"],
-        "avg_download": summary["overall"]["download_mbps"]["avg"],
-        "avg_upload": summary["overall"]["upload_mbps"]["avg"],
-        "avg_ping": summary["overall"]["ping_ms"]["avg"],
-        "unique_servers": summary.get("servers_top", []),
-        "urls_count": len(summary.get("result_urls", [])),
-        "unique_ips": summary.get("public_ips", []),
-        "anomalies_count": len(summary.get("anomalies", [])),
-        "s3_key": key,
+        "hosts_aggregated": len(hosts),
+        "total_records": total_records,
+        "host_results": all_results,
     }
+    
+    # Add global summary stats if available
+    if global_summary:
+        result.update({
+            "avg_download": global_summary["overall"]["download_mbps"]["avg"],
+            "avg_upload": global_summary["overall"]["upload_mbps"]["avg"],
+            "avg_ping": global_summary["overall"]["ping_ms"]["avg"],
+            "anomalies_count": len(global_summary.get("anomalies", [])),
+        })
+    
     log.info(f"Aggregation summary: {json.dumps(result, indent=2)}")
-    emit_success_event("daily")      # at end of run_daily
+    emit_success_event("daily")
     return result
 
 # --- Hourly rollup (aggregate minute data into hourly summaries) --------------
 @log_execution
-def aggregate_hourly():
+def aggregate_hourly_for_host(target_hour: datetime.datetime, host_id: str = None):
     """
-    Aggregate all minute-level data for the previous hour into an hourly summary.
+    Aggregate all minute-level data for a specific hour and optional host.
     """
-    now_ist = datetime.datetime.now(TIMEZONE)
-    # Target the previous completed hour
-    target_hour = (now_ist - datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-    
     year = target_hour.strftime("%Y")
     month = target_hour.strftime("%Y%m")
     day = target_hour.strftime("%Y%m%d")
     hour = target_hour.strftime("%Y%m%d%H")
     
-    prefix = f"year={year}/month={month}/day={day}/hour={hour}/"
-    log.info(f"Scanning prefix for hourly aggregation: {prefix}")
+    host_prefix = get_host_prefix(host_id) if host_id else ""
+    prefix = f"{host_prefix}year={year}/month={month}/day={day}/hour={hour}/"
+    log.info(f"Scanning prefix for hourly aggregation: {prefix}" + (f" host={host_id}" if host_id else ""))
 
     downloads, uploads, pings = [], [], []
     servers = []
     ips = set()
     connection_types = []
+    hosts_seen = set()
     count = 0
     errors_count = 0
 
@@ -492,6 +570,9 @@ def aggregate_hourly():
             uploads.append(ul)
             pings.append(ping)
             count += 1
+
+            rec_host = rec.get("host_id", "_legacy")
+            hosts_seen.add(rec_host)
 
             s_name = (rec.get("server_name") or "").strip()
             s_host = (rec.get("server_host") or "").strip()
@@ -516,30 +597,26 @@ def aggregate_hourly():
             errors_count += 1
 
     if count == 0:
-        log.warning(f"No data found for hour {hour}")
+        log.warning(f"No data found for hour {hour}" + (f" host={host_id}" if host_id else ""))
         return None
 
     anomalies = detect_anomalies(downloads, uploads, pings, connection_types)
     
-    # Expect 4 records per hour (15-min intervals: 00, 15, 30, 45)
-    # But proceed with partial data (1-4 files) as they become available
     expected_records = 4
     completion_rate = (count / expected_records) * 100
     if count < expected_records:
         log.info(f"Partial hour data: {count}/{expected_records} records ({completion_rate:.1f}%)")
-        # Note: We still aggregate with whatever data is available
 
     top_servers = [s for s, _ in Counter(servers).most_common(3)]
-    
-    # Collect all unique connection types from the hour
     unique_connection_types = sorted(list(set(connection_types))) if connection_types else []
     
-    # Get the threshold for the most common connection type
     most_common_conn = Counter(connection_types).most_common(1)[0][0] if connection_types else None
     threshold_used = CONNECTION_TYPE_THRESHOLDS.get(most_common_conn, EXPECTED_SPEED_MBPS)
 
     summary = {
         "hour_ist": target_hour.strftime("%Y-%m-%d %H:00"),
+        "host_id": host_id or "all",
+        "hosts_in_data": sorted(list(hosts_seen)),
         "records": count,
         "completion_rate": round(completion_rate, 1),
         "errors": errors_count,
@@ -556,45 +633,79 @@ def aggregate_hourly():
         "connection_type_thresholds": CONNECTION_TYPE_THRESHOLDS,
     }
 
-    # Upload to hourly bucket
-    key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/speed_test_summary.json"
-    s3.put_object(
-        Bucket=S3_BUCKET_HOURLY,
-        Key=key,
-        Body=json.dumps(summary, indent=2, ensure_ascii=False),
-        ContentType="application/json",
-    )
-    log.info(f"Hourly summary uploaded to s3://{S3_BUCKET_HOURLY}/{key}")
-    emit_success_event("hourly")
     return summary
+
+@log_execution
+def aggregate_hourly():
+    """
+    Aggregate all minute-level data for the previous hour into hourly summaries.
+    Creates per-host summaries and a global summary.
+    """
+    now_ist = datetime.datetime.now(TIMEZONE)
+    target_hour = (now_ist - datetime.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    
+    year = target_hour.strftime("%Y")
+    month = target_hour.strftime("%Y%m")
+    day = target_hour.strftime("%Y%m%d")
+    hour = target_hour.strftime("%Y%m%d%H")
+    
+    # Discover all hosts and aggregate for each
+    hosts = list_hosts()
+    all_results = []
+    
+    for host_id in hosts:
+        summary = aggregate_hourly_for_host(target_hour, host_id=host_id)
+        if summary:
+            # Upload per-host summary
+            if host_id and host_id != "all":
+                key = f"aggregated/host={host_id}/year={year}/month={month}/day={day}/hour={hour}/speed_test_summary.json"
+            else:
+                key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/speed_test_summary.json"
+            
+            s3.put_object(
+                Bucket=S3_BUCKET_HOURLY,
+                Key=key,
+                Body=json.dumps(summary, indent=2, ensure_ascii=False),
+                ContentType="application/json",
+            )
+            log.info(f"Hourly summary uploaded to s3://{S3_BUCKET_HOURLY}/{key}")
+            all_results.append({"host_id": host_id, "records": summary["records"], "s3_key": key})
+    
+    # Global summary across all hosts
+    global_summary = aggregate_hourly_for_host(target_hour, host_id=None)
+    if global_summary:
+        global_key = f"aggregated/year={year}/month={month}/day={day}/hour={hour}/speed_test_summary.json"
+        s3.put_object(
+            Bucket=S3_BUCKET_HOURLY,
+            Key=global_key,
+            Body=json.dumps(global_summary, indent=2, ensure_ascii=False),
+            ContentType="application/json",
+        )
+        log.info(f"Global hourly summary uploaded to s3://{S3_BUCKET_HOURLY}/{global_key}")
+    
+    emit_success_event("hourly")
+    return {"hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
 
 # --- Weekly rollup (last completed Mon..Sun) ----------------------------------
 @log_execution
-def aggregate_weekly():
-    """
-    Aggregate the last COMPLETED week (Mon-Sun). 
-    Always aggregates the previous week to ensure all 7 days of data are available.
-    """
-    today_ist = datetime.datetime.now(TIMEZONE).date()
-    
-    # Always go back to the previous completed week
-    # Find Monday of current week, then go back 7 days to get previous Monday
-    current_week_monday = today_ist - datetime.timedelta(days=today_ist.weekday())
-    this_monday = current_week_monday - datetime.timedelta(days=7)
-    this_sunday = this_monday + datetime.timedelta(days=6)
-
-    log.info(f"Aggregating weekly data for {this_monday} to {this_sunday} (previous completed week)")
-    
+def aggregate_weekly_for_host(this_monday, this_sunday, host_id: str = None):
+    """Aggregate weekly data for a specific host."""
     daily_summaries = []
     missing_days = []
     d = this_monday
     while d <= this_sunday:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
-        key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        
+        # Use host-prefixed key for per-host aggregation
+        if host_id and host_id != "all" and host_id != "_legacy":
+            key = f"aggregated/host={host_id}/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        else:
+            key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             daily_summaries.append(json.loads(obj["Body"].read()))
-            log.info(f"Loaded daily summary for {dd}")
+            log.info(f"Loaded daily summary for {dd}" + (f" host={host_id}" if host_id else ""))
         except s3.exceptions.NoSuchKey:
             log.warning(f"Missing daily summary for {dd} (key: {key})")
             missing_days.append(dd)
@@ -603,16 +714,10 @@ def aggregate_weekly():
             missing_days.append(dd)
         d += datetime.timedelta(days=1)
 
-    log.info(f"Weekly aggregation: Found {len(daily_summaries)}/7 daily summaries, missing {len(missing_days)} days: {missing_days}")
+    log.info(f"Weekly aggregation: Found {len(daily_summaries)}/7 daily summaries" + (f" for host={host_id}" if host_id else ""))
     
     if not daily_summaries:
-        log.error(f"Weekly aggregation failed: No daily summaries found for week {this_monday} to {this_sunday}")
         return None
-    
-    if len(daily_summaries) < 3:
-        log.warning(f"Weekly aggregation: Only {len(daily_summaries)} days available, but proceeding with partial data")
-    
-    log.info(f"Proceeding with weekly aggregation using {len(daily_summaries)} daily summaries")
 
     # Collect all unique connection types from the week
     all_connection_types = set()
@@ -625,6 +730,7 @@ def aggregate_weekly():
     summary = {
         "week_start": str(this_monday),
         "week_end": str(this_sunday),
+        "host_id": host_id or "all",
         "days": len(daily_summaries),
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in daily_summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in daily_summaries]), 2),
@@ -632,43 +738,77 @@ def aggregate_weekly():
         "connection_types": unique_connection_types,
     }
 
-    # Use ISO week number (Monday-based, 1-53)
+    return summary
+
+@log_execution
+def aggregate_weekly():
+    """
+    Aggregate the last COMPLETED week (Mon-Sun) for all hosts.
+    Creates per-host summaries and a global summary.
+    """
+    today_ist = datetime.datetime.now(TIMEZONE).date()
+    
+    current_week_monday = today_ist - datetime.timedelta(days=today_ist.weekday())
+    this_monday = current_week_monday - datetime.timedelta(days=7)
+    this_sunday = this_monday + datetime.timedelta(days=6)
+
+    log.info(f"Aggregating weekly data for {this_monday} to {this_sunday} (previous completed week)")
+    
+    # Use ISO week number
     iso_year, iso_week, _ = this_monday.isocalendar()
     week_label = f"{iso_year}W{iso_week:02d}"
-    key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
     
-    log.info(f"Uploading weekly summary to {key} (avg_download: {summary['avg_download']} Mbps)")
+    # Discover all hosts and aggregate for each
+    hosts = list_hosts()
+    all_results = []
     
-    s3.put_object(
-        Bucket=S3_BUCKET_WEEKLY,
-        Key=key,
-        Body=json.dumps(summary, indent=2),
-        ContentType="application/json",
-    )
-    log.info(f"Weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{key}")
-    emit_success_event("weekly")     # at end of aggregate_weekly
-    return summary
+    for host_id in hosts:
+        summary = aggregate_weekly_for_host(this_monday, this_sunday, host_id=host_id)
+        if summary:
+            if host_id and host_id != "all" and host_id != "_legacy":
+                key = f"aggregated/host={host_id}/year={this_monday.year}/week={week_label}/speed_test_summary.json"
+            else:
+                key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
+            
+            s3.put_object(
+                Bucket=S3_BUCKET_WEEKLY,
+                Key=key,
+                Body=json.dumps(summary, indent=2),
+                ContentType="application/json",
+            )
+            log.info(f"Weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{key}")
+            all_results.append({"host_id": host_id, "days": summary["days"], "s3_key": key})
+    
+    # Global summary (uses global daily summaries which already combine all hosts)
+    global_summary = aggregate_weekly_for_host(this_monday, this_sunday, host_id=None)
+    if global_summary:
+        global_key = f"aggregated/year={this_monday.year}/week={week_label}/speed_test_summary.json"
+        s3.put_object(
+            Bucket=S3_BUCKET_WEEKLY,
+            Key=global_key,
+            Body=json.dumps(global_summary, indent=2),
+            ContentType="application/json",
+        )
+        log.info(f"Global weekly summary uploaded to s3://{S3_BUCKET_WEEKLY}/{global_key}")
+    
+    emit_success_event("weekly")
+    return {"week": week_label, "hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
 
 # --- Monthly rollup (previous calendar month) ---------------------------------
 @log_execution
-def aggregate_monthly():
-    """Aggregate all daily summaries for the current month up to yesterday (last completed day)."""
-    today = datetime.datetime.now(TIMEZONE).date()
-    yesterday = today - datetime.timedelta(days=1)
-    
-    # Aggregate the month that just completed (yesterday's month)
-    first_day = yesterday.replace(day=1)
-    last_day = yesterday
-    month_tag = first_day.strftime("%Y%m")
-
-    log.info(f"Aggregating monthly data for {month_tag} ({first_day} to {last_day}) - up to yesterday")
-    
+def aggregate_monthly_for_host(first_day, last_day, month_tag, host_id: str = None):
+    """Aggregate monthly data for a specific host."""
     summaries = []
     missing_days = []
     d = first_day
     while d <= last_day:
         y, m, dd = d.strftime("%Y"), d.strftime("%Y%m"), d.strftime("%Y%m%d")
-        key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        
+        if host_id and host_id != "all" and host_id != "_legacy":
+            key = f"aggregated/host={host_id}/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        else:
+            key = f"aggregated/year={y}/month={m}/day={dd}/speed_test_summary.json"
+        
         try:
             obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
@@ -680,18 +820,12 @@ def aggregate_monthly():
             missing_days.append(dd)
         d += datetime.timedelta(days=1)
 
-    log.info(f"Monthly aggregation: Found {len(summaries)} daily summaries, missing {len(missing_days)} days")
+    log.info(f"Monthly aggregation: Found {len(summaries)} daily summaries" + (f" for host={host_id}" if host_id else ""))
     
     if not summaries:
-        log.error(f"Monthly aggregation failed: No daily summaries found for month {month_tag}")
         return None
-    
-    if len(missing_days) > len(summaries):
-        log.warning(f"Monthly aggregation: More days missing ({len(missing_days)}) than available ({len(summaries)}), but proceeding")
-    
-    log.info(f"Proceeding with monthly aggregation using {len(summaries)} daily summaries")
 
-    # Collect all unique connection types from the month
+    # Collect all unique connection types
     all_connection_types = set()
     for ds in summaries:
         conn_types = ds.get("connection_types", [])
@@ -701,6 +835,7 @@ def aggregate_monthly():
 
     summary = {
         "month": month_tag,
+        "host_id": host_id or "all",
         "days": len(summaries),
         "avg_download": round(mean([x["overall"]["download_mbps"]["avg"] for x in summaries]), 2),
         "avg_upload": round(mean([x["overall"]["upload_mbps"]["avg"] for x in summaries]), 2),
@@ -708,44 +843,81 @@ def aggregate_monthly():
         "connection_types": unique_connection_types,
     }
 
-    key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
-    
-    log.info(f"Uploading monthly summary to {key} (avg_download: {summary['avg_download']} Mbps, days: {summary['days']})")
-    
-    s3.put_object(
-        Bucket=S3_BUCKET_MONTHLY,
-        Key=key,
-        Body=json.dumps(summary, indent=2),
-        ContentType="application/json",
-    )
-    log.info(f"Monthly summary uploaded to s3://{S3_BUCKET_MONTHLY}/{key}")
-    emit_success_event("monthly")     # at end of aggregate_monthly
     return summary
+
+@log_execution
+def aggregate_monthly():
+    """Aggregate all daily summaries for the current month up to yesterday for all hosts."""
+    today = datetime.datetime.now(TIMEZONE).date()
+    yesterday = today - datetime.timedelta(days=1)
+    
+    first_day = yesterday.replace(day=1)
+    last_day = yesterday
+    month_tag = first_day.strftime("%Y%m")
+
+    log.info(f"Aggregating monthly data for {month_tag} ({first_day} to {last_day}) - up to yesterday")
+    
+    # Discover all hosts
+    hosts = list_hosts()
+    all_results = []
+    
+    for host_id in hosts:
+        summary = aggregate_monthly_for_host(first_day, last_day, month_tag, host_id=host_id)
+        if summary:
+            if host_id and host_id != "all" and host_id != "_legacy":
+                key = f"aggregated/host={host_id}/year={first_day.year}/month={month_tag}/speed_test_summary.json"
+            else:
+                key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
+            
+            s3.put_object(
+                Bucket=S3_BUCKET_MONTHLY,
+                Key=key,
+                Body=json.dumps(summary, indent=2),
+                ContentType="application/json",
+            )
+            log.info(f"Monthly summary uploaded to s3://{S3_BUCKET_MONTHLY}/{key}")
+            all_results.append({"host_id": host_id, "days": summary["days"], "s3_key": key})
+    
+    # Global summary
+    global_summary = aggregate_monthly_for_host(first_day, last_day, month_tag, host_id=None)
+    if global_summary:
+        global_key = f"aggregated/year={first_day.year}/month={month_tag}/speed_test_summary.json"
+        s3.put_object(
+            Bucket=S3_BUCKET_MONTHLY,
+            Key=global_key,
+            Body=json.dumps(global_summary, indent=2),
+            ContentType="application/json",
+        )
+        log.info(f"Global monthly summary uploaded to s3://{S3_BUCKET_MONTHLY}/{global_key}")
+    
+    emit_success_event("monthly")
+    return {"month": month_tag, "hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
 
 # --- Yearly rollup (previous calendar year) -----------------------------------
 @log_execution
-def aggregate_yearly():
-    """Aggregate all monthly summaries for the current year (YTD)."""
-    now_ist = datetime.datetime.now(TIMEZONE).date()
-    current_year = now_ist.year
+def aggregate_yearly_for_host(current_year, max_month, host_id: str = None):
+    """Aggregate yearly data for a specific host."""
     summaries = []
 
-    # Look for all monthly summaries from Jan up to current month
-    for m in range(1, now_ist.month + 1):
+    for m in range(1, max_month + 1):
         month_str = f"{current_year}{m:02d}"
-        key = f"aggregated/year={current_year}/month={month_str}/speed_test_summary.json"
+        
+        if host_id and host_id != "all" and host_id != "_legacy":
+            key = f"aggregated/host={host_id}/year={current_year}/month={month_str}/speed_test_summary.json"
+        else:
+            key = f"aggregated/year={current_year}/month={month_str}/speed_test_summary.json"
+        
         try:
             obj = s3.get_object(Bucket=S3_BUCKET_MONTHLY, Key=key)
             summaries.append(json.loads(obj["Body"].read()))
         except Exception as e:
-            log.warning(f"Skipping missing month {month_str}: {e}")
+            log.warning(f"Skipping missing month {month_str}" + (f" for host={host_id}" if host_id else "") + f": {e}")
             continue
 
     if not summaries:
-        log.warning(f"No monthly summaries found for {current_year}")
         return None
 
-    # Collect all unique connection types from the year
+    # Collect all unique connection types
     all_connection_types = set()
     for ms in summaries:
         conn_types = ms.get("connection_types", [])
@@ -755,6 +927,7 @@ def aggregate_yearly():
 
     summary = {
         "year": current_year,
+        "host_id": host_id or "all",
         "months_aggregated": len(summaries),
         "avg_download": round(mean([x["avg_download"] for x in summaries]), 2),
         "avg_upload": round(mean([x["avg_upload"] for x in summaries]), 2),
@@ -762,16 +935,49 @@ def aggregate_yearly():
         "connection_types": unique_connection_types,
     }
 
-    key = f"aggregated/year={current_year}/speed_test_summary.json"
-    s3.put_object(
-        Bucket=S3_BUCKET_YEARLY,
-        Key=key,
-        Body=json.dumps(summary, indent=2),
-        ContentType="application/json",
-    )
-    log.info(f"Year-to-date summary uploaded to s3://{S3_BUCKET_YEARLY}/{key}")
-    emit_success_event("yearly")     # at end of aggregate_yearly
     return summary
+
+@log_execution
+def aggregate_yearly():
+    """Aggregate all monthly summaries for the current year (YTD) for all hosts."""
+    now_ist = datetime.datetime.now(TIMEZONE).date()
+    current_year = now_ist.year
+    
+    # Discover all hosts
+    hosts = list_hosts()
+    all_results = []
+    
+    for host_id in hosts:
+        summary = aggregate_yearly_for_host(current_year, now_ist.month, host_id=host_id)
+        if summary:
+            if host_id and host_id != "all" and host_id != "_legacy":
+                key = f"aggregated/host={host_id}/year={current_year}/speed_test_summary.json"
+            else:
+                key = f"aggregated/year={current_year}/speed_test_summary.json"
+            
+            s3.put_object(
+                Bucket=S3_BUCKET_YEARLY,
+                Key=key,
+                Body=json.dumps(summary, indent=2),
+                ContentType="application/json",
+            )
+            log.info(f"Yearly summary uploaded to s3://{S3_BUCKET_YEARLY}/{key}")
+            all_results.append({"host_id": host_id, "months": summary["months_aggregated"], "s3_key": key})
+    
+    # Global summary
+    global_summary = aggregate_yearly_for_host(current_year, now_ist.month, host_id=None)
+    if global_summary:
+        global_key = f"aggregated/year={current_year}/speed_test_summary.json"
+        s3.put_object(
+            Bucket=S3_BUCKET_YEARLY,
+            Key=global_key,
+            Body=json.dumps(global_summary, indent=2),
+            ContentType="application/json",
+        )
+        log.info(f"Global year-to-date summary uploaded to s3://{S3_BUCKET_YEARLY}/{global_key}")
+    
+    emit_success_event("yearly")
+    return {"year": current_year, "hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
 
 # --- Lambda handler -----------------------------------------------------------
 # ---------------------------------------------------------------------------

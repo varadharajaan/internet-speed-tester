@@ -79,8 +79,11 @@ Globals:
 
 Resources:
   # ---------------- S3 buckets ----------------
+  # These buckets use Retain policy - they won't be deleted if stack is removed
   HourlyBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'vd-speed-test-hourly-${Environment}'
       VersioningConfiguration: { Status: Suspended }
@@ -97,6 +100,8 @@ Resources:
 
   WeeklyBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'vd-speed-test-weekly-${Environment}'
       VersioningConfiguration: { Status: Suspended }
@@ -113,6 +118,8 @@ Resources:
 
   MonthlyBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'vd-speed-test-monthly-${Environment}'
       VersioningConfiguration: { Status: Suspended }
@@ -129,6 +136,8 @@ Resources:
 
   YearlyBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'vd-speed-test-yearly-${Environment}'
       VersioningConfiguration: { Status: Suspended }
@@ -175,6 +184,8 @@ Resources:
 
   AggregatorLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-daily-aggregator-${Environment}'
       RetentionInDays: 3
@@ -337,10 +348,12 @@ Resources:
       EventInvokeConfig:
         MaximumRetryAttempts: 0
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.12 
 
   DashboardLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-dashboard-${Environment}'
       RetentionInDays: 1
@@ -385,6 +398,8 @@ Resources:
 
   HourlyCheckerLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/lambda/vd-speedtest-hourly-checker-${Environment}'
       RetentionInDays: 1
@@ -518,6 +533,8 @@ Resources:
   # ---------------- Alarms -> SNS ----------------
   AlertsTopic:
     Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TopicName: !Sub vd-speedtest-alerts-${Environment}
       Subscription:

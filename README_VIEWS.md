@@ -74,6 +74,15 @@ http://localhost:8080/?mode=yearly&days=10
 
 # Hourly view - Last 24 hours
 http://localhost:8080/?mode=hourly&days=1
+
+# With async loading (instant page load)
+http://localhost:8080/?mode=daily&days=30&async=1
+
+# Force refresh cache
+http://localhost:8080/?mode=daily&days=30&force_refresh=1
+
+# Filter by specific host
+http://localhost:8080/?mode=daily&days=30&host=home-primary
 ```
 
 ### Option C: Use API Endpoints (For Programmatic Access)

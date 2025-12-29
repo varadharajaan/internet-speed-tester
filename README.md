@@ -15,13 +15,17 @@
 |---------|-------------|
 | **📊 Automated Collection** | Runs every 15 minutes, captures Ookla CLI results |
 | **☁️ Serverless Architecture** | 3 AWS Lambda functions with EventBridge scheduling |
+| **�️ Multi-Host Support** | Deploy collectors on multiple machines, view per-host or global stats |
 | **🔍 Anomaly Detection** | Automatic detection of performance drops and outages |
-| **📈 Interactive Dashboard** | Real-time visualization with advanced filtering |
+| **📈 Interactive Dashboard** | Real-time visualization with host filtering and advanced filters |
 | **🚨 CloudWatch Integration** | JSON structured logging with pre-built queries |
 | **📱 Mobile Responsive** | Access dashboard from any device |
 | **🎯 Threshold Monitoring** | Configurable speed expectations with alerts |
 | **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly summaries |
-| **📊 Advanced Metrics** | Custom CloudWatch metrics with filtering |
+| **⚡ Async Loading** | Instant page load with `async=1` parameter |
+| **�️ Smart Caching** | 2-minute TTL cache with force refresh option |
+| **🚀 Parallel Fetches** | ThreadPoolExecutor for fast S3 data loading |
+| **�📊 Advanced Metrics** | Custom CloudWatch metrics with filtering |
 | **⚠️ Smart Alarms** | Multi-level alerting with SNS notifications |
 | **⏰ Hourly Insights** | Automated hourly aggregation with partial data support |
 
@@ -53,7 +57,7 @@ vd-speed-test/
 │
 └── 📚 DOCUMENTATION
     ├── README.md                     # This guide
-    └── vd-speed-test-architecture.png
+    └── vd-speed-test-architecture.svg
 ```
 
 ---
@@ -62,7 +66,7 @@ vd-speed-test/
 
 ### 📐 High-Level Architecture
 
-![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/vd-speed-test-architecture.png)
+![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/vd-speed-test-architecture.svg)
 
 *Complete system architecture showing data flow from local collector to AWS services*
 

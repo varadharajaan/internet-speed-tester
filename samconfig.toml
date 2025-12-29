@@ -7,6 +7,7 @@ parallel = true
 
 [default.deploy.parameters]
 stack_name = "vd-speedtest-stack"
+region = "ap-south-1"
 capabilities = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
 confirm_changeset = false
 s3_bucket = "vd-speed-test"

@@ -8,4 +8,5 @@ MarkupSafe
 Werkzeug
 asgiref==3.7.2
 serverless-wsgi==3.0.3
+requests==2.31.0
 
