@@ -4,18 +4,30 @@ vd-speed-test dashboard
 -----------------------
 Flask web app to visualize internet speed statistics from S3.
 Now includes CloudWatch-compatible JSON logging and local file rotation.
+
+Refactored to use shared/ modules for:
+- Configuration (shared/config.py)
+- Logging (shared/logging.py)
+- AWS clients (shared/aws.py)
+- Constants (shared/constants.py)
 """
 
 from flask import Flask, render_template, request, jsonify
 import boto3, json, pandas as pd, re
 from botocore.config import Config as BotoConfig
-import pytz, datetime, os, logging, sys
+import pytz, datetime, os, sys
 from functools import wraps
-from logging.handlers import RotatingFileHandler
-import socket
 import time
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Import from shared modules
+from shared import get_config, get_logger, get_s3_client
+from shared.constants import CACHE_TTL, MAX_CHART_POINTS
+
+# Get configuration and logger
+config = get_config()
+log = get_logger(__name__)
 
 # --- In-Memory Cache with TTL and Disk Persistence ------------------------------
 import pickle
@@ -278,58 +290,23 @@ def downsample_chart_data(chart_data: dict, max_points: int = 200) -> dict:
     }
 
 
-# --- Configuration from config.json --------------------------------------------
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-DEFAULT_CONFIG = {
-    "s3_bucket": "vd-speed-test",
-    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
-    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
-    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
-    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
-    "aws_region": "ap-south-1",
-    "timezone": "Asia/Kolkata",
-    "log_level": "INFO",
-    "log_max_bytes": 10485760,
-    "log_backup_count": 5,
-    "expected_speed_mbps": 200,
-    "tolerance_percent": 10
-}
-
-# Load config
-config = DEFAULT_CONFIG.copy()
-if os.path.exists(CONFIG_PATH):
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config.update(json.load(f))
-    except Exception as e:
-        print(f"Warning: Failed to load config.json: {e}. Using defaults.")
-
-# Extract configuration values
-S3_BUCKET = os.getenv("S3_BUCKET", config.get("s3_bucket"))
-S3_BUCKET_HOURLY = os.getenv("S3_BUCKET_HOURLY", config.get("s3_bucket_hourly"))
-S3_BUCKET_WEEKLY = os.getenv("S3_BUCKET_WEEKLY", config.get("s3_bucket_weekly"))
-S3_BUCKET_MONTHLY = os.getenv("S3_BUCKET_MONTHLY", config.get("s3_bucket_monthly"))
-S3_BUCKET_YEARLY = os.getenv("S3_BUCKET_YEARLY", config.get("s3_bucket_yearly"))
-AWS_REGION = os.getenv("AWS_REGION", config.get("aws_region"))
-TIMEZONE = pytz.timezone(config.get("timezone"))
-LOG_FILE_PATH = os.path.join(os.getcwd(), "dashboard.log")
-LOG_MAX_BYTES = config.get("log_max_bytes")
-LOG_BACKUP_COUNT = config.get("log_backup_count")
-LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
-HOSTNAME = os.getenv("HOSTNAME", socket.gethostname())
-DEFAULT_THRESHOLD = float(config.get("expected_speed_mbps"))
-TOLERANCE_PERCENT = float(config.get("tolerance_percent"))
+# --- Configuration (using shared/config.py) -----------------------------------
+# Config and log are imported from shared modules at the top
+# These variables are kept for backward compatibility with existing code
+S3_BUCKET = config.s3_bucket
+S3_BUCKET_HOURLY = config.s3_bucket_hourly
+S3_BUCKET_WEEKLY = config.s3_bucket_weekly
+S3_BUCKET_MONTHLY = config.s3_bucket_monthly
+S3_BUCKET_YEARLY = config.s3_bucket_yearly
+AWS_REGION = config.aws_region
+TIMEZONE = pytz.timezone(config.timezone)
+DEFAULT_THRESHOLD = float(config.expected_speed_mbps)
+TOLERANCE_PERCENT = float(config.tolerance_percent)
 
 app = Flask(__name__)
 
-# Optimized S3 client with connection pooling for faster parallel requests
-s3_config = BotoConfig(
-    max_pool_connections=100,  # Allow more concurrent connections
-    connect_timeout=5,
-    read_timeout=10,
-    retries={'max_attempts': 2}
-)
-s3 = boto3.client("s3", region_name=AWS_REGION, config=s3_config)
+# Use shared S3 client
+s3 = get_s3_client()
 
 # --- Multi-host support -------------------------------------------------------
 def list_hosts():
@@ -375,73 +352,9 @@ def get_host_prefix(host_id):
         return ""
     return f"host={host_id}/"
 
-# --- JSON Logger --------------------------------------------------------------
-class CustomLogger:
-    def __init__(self, name=__name__, level=LOG_LEVEL):
-        self.logger = logging.getLogger(name)
-        if not self.logger.handlers:
-            formatter = self.JsonFormatter()
 
-            # Console handler (CloudWatch captures this)
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            self.logger.addHandler(console_handler)
-
-            # File handler (only for local dev)
-            if not self.is_lambda_environment():
-                file_handler = RotatingFileHandler(
-                    LOG_FILE_PATH,
-                    maxBytes=LOG_MAX_BYTES,
-                    backupCount=LOG_BACKUP_COUNT,
-                    encoding="utf-8"
-                )
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
-
-        self.logger.setLevel(level)
-        self.logger.propagate = False
-
-    class JsonFormatter(logging.Formatter):
-        def format(self, record):
-            entry = {
-                "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "function": record.funcName,
-                "module": record.module,
-                "hostname": HOSTNAME,
-            }
-            if record.exc_info:
-                entry["error"] = self.formatException(record.exc_info)
-            return json.dumps(entry)
-
-    @staticmethod
-    def is_lambda_environment():
-        return "AWS_LAMBDA_FUNCTION_NAME" in os.environ
-
-    def info(self, msg, *args): self.logger.info(msg, *args)
-    def warning(self, msg, *args): self.logger.warning(msg, *args)
-    def error(self, msg, *args): self.logger.error(msg, *args)
-    def debug(self, msg, *args): self.logger.debug(msg, *args)
-    def exception(self, msg, *args): self.logger.exception(msg, *args)
-
-log = CustomLogger(__name__)
-
-# --- Decorator for Logging ----------------------------------------------------
-def log_execution(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        log.info(f"Executing {func.__name__}")
-        start = datetime.datetime.now(datetime.UTC)
-        try:
-            result = func(*args, **kwargs)
-            elapsed = (datetime.datetime.now(datetime.UTC) - start).total_seconds()
-            log.info(f"Completed {func.__name__} in {elapsed:.2f}s")
-            return result
-        except Exception as e:
-            log.exception(f"Error in {func.__name__}: {e}")
-            raise
-    return wrapper
+# --- Decorator for Logging (using shared/logging.py) -------------------------
+from shared.logging import log_execution
 
 # --- S3 Utility Functions -----------------------------------------------------
 @log_execution
@@ -1061,12 +974,7 @@ def detect_anomalies(df):
     df["ping_anomaly"] = df["ping_avg"] > (1.5 * ping_mean)
     
     # Connection-aware threshold anomalies
-    connection_thresholds = config.get("connection_type_thresholds", {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    })
+    connection_thresholds = config.connection_type_thresholds
     
     tolerance = TOLERANCE_PERCENT / 100.0
     
@@ -1130,7 +1038,7 @@ def dashboard():
             min_ping="", max_ping="", connection_type="", isp="",
             default_threshold=DEFAULT_THRESHOLD,
             tolerance_percent=TOLERANCE_PERCENT,
-            connection_type_thresholds=config.get("connection_type_thresholds", {}),
+            connection_type_thresholds=config.connection_type_thresholds,
             mode=mode,
             available_hosts=available_hosts,
             selected_host=host_id
@@ -1503,12 +1411,7 @@ def dashboard():
         df = df.sort_values("date_ist", ascending=False)
     
     # Get connection type thresholds from config
-    connection_type_thresholds = config.get("connection_type_thresholds", {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    })
+    connection_type_thresholds = config.connection_type_thresholds
     
     return render_template(
         "dashboard_modern.html",

@@ -18,10 +18,14 @@ import datetime
 import boto3
 import os
 import argparse
+import sys
 import pytz
 
-# Load config
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load config from parent directory
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 

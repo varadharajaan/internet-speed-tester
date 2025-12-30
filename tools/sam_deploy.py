@@ -5,19 +5,24 @@ SAM Build & Deploy Script
 Builds and deploys the SAM stack with real-time console output.
 
 Usage:
-    python sam_deploy.py           # Build + Deploy (default)
-    python sam_deploy.py -b        # Build only
-    python sam_deploy.py -d        # Deploy only
-    python sam_deploy.py --build   # Build only
-    python sam_deploy.py --deploy  # Deploy only
+    python tools/sam_deploy.py           # Build + Deploy (default)
+    python tools/sam_deploy.py -b        # Build only
+    python tools/sam_deploy.py -d        # Deploy only
+    python tools/sam_deploy.py --build   # Build only
+    python tools/sam_deploy.py --deploy  # Deploy only
 """
 
 import subprocess
 import sys
+import os
 import time
 import argparse
 import boto3
 from datetime import datetime
+
+# Change to project root directory
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(PROJECT_ROOT)
 import os
 
 # Configuration

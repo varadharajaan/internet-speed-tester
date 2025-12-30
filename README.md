@@ -38,9 +38,10 @@
 
 ```
 vd-speed-test/
-├── 🖥️ LOCAL COLLECTOR
+├── 🖥️ LOCAL COLLECTOR (agent/)
 │   ├── speed_collector.py            # 15-min speed test runner (with duplicate prevention)
 │   ├── speedtest.exe                 # Ookla CLI for Windows
+│   ├── run_speed_collector.vbs       # VBS wrapper for hidden execution
 │   └── speed_collector_autostart.xml # Windows Task Scheduler config
 │
 ├── ☁️ AWS LAMBDA FUNCTIONS
@@ -53,7 +54,7 @@ vd-speed-test/
 │   ├── templates/dashboard.html      # Interactive UI
 │   └── config.json                   # Speed thresholds
 │
-├── 🛠️ DEVELOPER TOOLS
+├── 🛠️ DEVELOPER TOOLS (tools/)
 │   ├── tail_logs.py                  # Real-time Lambda log tailing
 │   ├── check_latest.py               # Multi-period S3 data viewer
 │   ├── cleanup_duplicates.py         # Duplicate entry cleanup tool
@@ -66,7 +67,8 @@ vd-speed-test/
 │
 └── 📚 DOCUMENTATION
     ├── README.md                     # This guide
-    └── vd-speed-test-architecture.svg
+    ├── docs/                         # Additional documentation
+    └── images/                       # Architecture diagrams
 ```
 
 ---
@@ -75,7 +77,7 @@ vd-speed-test/
 
 ### 📐 High-Level Architecture
 
-![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/vd-speed-test-architecture.svg)
+![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/images/vd-speed-test-architecture.svg)
 
 *Complete system architecture showing data flow from local collector to AWS services*
 
@@ -231,7 +233,7 @@ aws sts get-caller-identity
 ### 3️⃣ Run Speed Test
 
 ```bash
-python speed_collector.py
+python agent/speed_collector.py
 ```
 
 ### 4️⃣ Deploy to AWS
@@ -1055,14 +1057,16 @@ sam deploy
 
 For local data collection on Windows:
 
-1. Edit `speed_collector_autostart.xml` with your Python paths
+1. Edit `agent/speed_collector_autostart.xml` with your paths
 2. Open Task Scheduler → Import Task
 3. Select the modified XML file
 4. Set credentials and enable the task
 
+The XML uses VBS wrapper for hidden execution:
 ```xml
-<Command>C:\Users\YourUser\AppData\Local\Programs\Python\Python312\pythonw.exe</Command>
-<Arguments>C:\path\to\speed_collector.py</Arguments>
+<Command>C:\Windows\System32\wscript.exe</Command>
+<Arguments>"C:\vd-speed-test\agent\run_speed_collector.vbs"</Arguments>
+<WorkingDirectory>C:\vd-speed-test\agent</WorkingDirectory>
 ```
 
 **Task runs every 15 minutes automatically** ✅

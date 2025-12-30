@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-import json, datetime, pytz
+import json, datetime, pytz, os, sys
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from lambda_function import aggregate_for_date, upload_summary, TIMEZONE, S3_BUCKET, S3_BUCKET_HOURLY, S3_BUCKET_WEEKLY, S3_BUCKET_MONTHLY, S3_BUCKET_YEARLY
 
 def main():

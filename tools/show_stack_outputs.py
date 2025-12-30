@@ -9,10 +9,13 @@ import json
 from datetime import datetime
 import os
 
+# Project root directory
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Configuration
 STACK_NAME = "vd-speedtest-stack"
 REGION = "ap-south-1"
-OUTPUT_FILE = "stack-outputs.txt"
+OUTPUT_FILE = os.path.join(PROJECT_ROOT, "stack-outputs.txt")
 
 
 def get_stack_outputs():

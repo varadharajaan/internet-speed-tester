@@ -13,190 +13,33 @@ vd-speed-test aggregator Lambda
 Note: All aggregation levels now use the same filename (speed_test_summary.json) for simplicity.
 """
 
-import boto3
 import json
 import datetime
 import pytz
-import logging
-import os
-import sys
-from logging.handlers import RotatingFileHandler
 from statistics import mean, median
 from collections import Counter
-from functools import wraps
-from calendar import monthrange  # for clean month-end calculation
 
-# --- Configuration from config.json + env vars --------------------------------
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-DEFAULT_CONFIG = {
-    "s3_bucket": "vd-speed-test",
-    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
-    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
-    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
-    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
-    "aws_region": "ap-south-1",
-    "timezone": "Asia/Kolkata",
-    "expected_speed_mbps": 200,
-    "tolerance_percent": 10,
-    "connection_type_thresholds": {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    },
-    "log_level": "INFO",
-    "log_max_bytes": 10485760,
-    "log_backup_count": 5
-}
+# --- Shared module imports ----------------------------------------------------
+from shared import get_config, get_logger, get_s3_client, list_hosts
+from shared.logging import log_execution
+from shared.constants import CONNECTION_TYPE_THRESHOLDS, ANOMALY_THRESHOLDS
 
-# Load config
-config = DEFAULT_CONFIG.copy()
-if os.path.exists(CONFIG_PATH):
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config.update(json.load(f))
-    except Exception:
-        pass  # Use defaults if config fails to load
+# --- Configuration via shared module ------------------------------------------
+config = get_config()
+log = get_logger(__name__)
+s3 = get_s3_client()
 
-S3_BUCKET = os.environ.get("S3_BUCKET", config.get("s3_bucket"))
-AWS_REGION1 = os.environ.get("AWS_REGION1", config.get("aws_region"))
-TIMEZONE = pytz.timezone(config.get("timezone"))
-EXPECTED_SPEED_MBPS = float(os.environ.get("EXPECTED_SPEED_MBPS", str(config.get("expected_speed_mbps"))))
-TOLERANCE_PERCENT = float(os.environ.get("TOLERANCE_PERCENT", str(config.get("tolerance_percent"))))
+# Convenience aliases for bucket names
+S3_BUCKET = config.s3_bucket
+S3_BUCKET_HOURLY = config.s3_bucket_hourly
+S3_BUCKET_WEEKLY = config.s3_bucket_weekly
+S3_BUCKET_MONTHLY = config.s3_bucket_monthly
+S3_BUCKET_YEARLY = config.s3_bucket_yearly
 
-# Load connection type thresholds from environment or config
-try:
-    conn_type_env = os.environ.get("CONNECTION_TYPE_THRESHOLDS")
-    if conn_type_env:
-        CONNECTION_TYPE_THRESHOLDS = json.loads(conn_type_env)
-    else:
-        CONNECTION_TYPE_THRESHOLDS = config.get("connection_type_thresholds", {
-            "Wi-Fi 5GHz": 200,
-            "Wi-Fi 2.4GHz": 100,
-            "Ethernet": 200,
-            "Unknown": 150
-        })
-except (json.JSONDecodeError, ValueError):
-    CONNECTION_TYPE_THRESHOLDS = {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    }
+TIMEZONE = pytz.timezone(config.timezone)
+EXPECTED_SPEED_MBPS = config.expected_speed_mbps
+TOLERANCE_PERCENT = config.tolerance_percent
 
-# Rollup buckets from config.json (with environment variable override)
-S3_BUCKET_HOURLY = os.environ.get("S3_BUCKET_HOURLY", config.get("s3_bucket_hourly"))
-S3_BUCKET_WEEKLY = os.environ.get("S3_BUCKET_WEEKLY", config.get("s3_bucket_weekly"))
-S3_BUCKET_MONTHLY = os.environ.get("S3_BUCKET_MONTHLY", config.get("s3_bucket_monthly"))
-S3_BUCKET_YEARLY = os.environ.get("S3_BUCKET_YEARLY", config.get("s3_bucket_yearly"))
-
-LOG_FILE_PATH = os.path.join(os.getcwd(), "aggregator.log")
-LOG_MAX_BYTES = config.get("log_max_bytes")
-LOG_BACKUP_COUNT = config.get("log_backup_count")
-LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
-try:
-    HOSTNAME = os.getenv("HOSTNAME", os.uname().nodename)
-except AttributeError:
-    HOSTNAME = os.getenv("HOSTNAME", "unknown-host")
-
-
-# --- AWS Client ---------------------------------------------------------------
-s3 = boto3.client("s3", region_name=AWS_REGION1)
-
-# --- Multi-host support -------------------------------------------------------
-def list_hosts() -> list:
-    """
-    Discover all unique host IDs from the S3 bucket by scanning top-level prefixes.
-    Returns a list of host_id strings (e.g., ['home-primary', 'office-backup']).
-    Also checks for legacy data without host prefix.
-    """
-    hosts = set()
-    
-    # Check for host= prefixes (new format)
-    try:
-        result = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix="host=", Delimiter="/")
-        for prefix in result.get("CommonPrefixes", []):
-            # prefix["Prefix"] is like "host=home-primary/"
-            host_prefix = prefix["Prefix"]
-            if host_prefix.startswith("host=") and host_prefix.endswith("/"):
-                host_id = host_prefix[5:-1]  # Extract "home-primary" from "host=home-primary/"
-                hosts.add(host_id)
-    except Exception as e:
-        log.warning(f"Error listing host prefixes: {e}")
-    
-    # Check for legacy data (year= prefix without host)
-    try:
-        result = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix="year=", Delimiter="/", MaxKeys=1)
-        if result.get("CommonPrefixes") or result.get("Contents"):
-            hosts.add("_legacy")  # Special marker for legacy data
-    except Exception as e:
-        log.warning(f"Error checking legacy data: {e}")
-    
-    log.info(f"Discovered hosts: {sorted(hosts)}")
-    return sorted(hosts)
-
-# --- Custom JSON Logger -------------------------------------------------------
-class CustomLogger:
-    def __init__(self, name=__name__, level=LOG_LEVEL):
-        self.logger = logging.getLogger(name)
-        if not self.logger.handlers:
-            formatter = self.JsonFormatter()
-
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            self.logger.addHandler(console_handler)
-
-            if not self.is_lambda_environment():
-                file_handler = RotatingFileHandler(
-                    LOG_FILE_PATH, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT, encoding="utf-8"
-                )
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
-
-        self.logger.setLevel(level)
-        self.logger.propagate = False
-
-    class JsonFormatter(logging.Formatter):
-        def format(self, record):
-            entry = {
-                "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "function": record.funcName,
-                "module": record.module,
-                "hostname": HOSTNAME,
-            }
-            if record.exc_info:
-                entry["error"] = self.formatException(record.exc_info)
-            return json.dumps(entry)
-
-    @staticmethod
-    def is_lambda_environment():
-        return "AWS_LAMBDA_FUNCTION_NAME" in os.environ
-
-    def info(self, msg, *args): self.logger.info(msg, *args)
-    def warning(self, msg, *args): self.logger.warning(msg, *args)
-    def error(self, msg, *args): self.logger.error(msg, *args)
-    def debug(self, msg, *args): self.logger.debug(msg, *args)
-    def exception(self, msg, *args): self.logger.exception(msg, *args)
-
-log = CustomLogger(__name__)
-
-# --- Decorator ----------------------------------------------------------------
-def log_execution(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        log.info(f"Starting: {func.__name__}")
-        start = datetime.datetime.now(datetime.UTC)
-        try:
-            result = func(*args, **kwargs)
-            duration = (datetime.datetime.now(datetime.UTC) - start).total_seconds()
-            log.info(f"Completed: {func.__name__} in {duration:.2f}s")
-            return result
-        except Exception as e:
-            log.exception(f"Error in {func.__name__}: {e}")
-            raise
-    return wrapper
 
 # --- Helpers ------------------------------------------------------------------
 def list_objects(prefix: str, bucket: str = None):
