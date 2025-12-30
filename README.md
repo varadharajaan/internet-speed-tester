@@ -66,7 +66,8 @@ vd-speed-test/
 │
 └── 📚 DOCUMENTATION
     ├── README.md                     # This guide
-    └── vd-speed-test-architecture.svg
+    ├── docs/                         # Additional documentation
+    └── images/                       # Architecture diagrams
 ```
 
 ---
@@ -75,7 +76,7 @@ vd-speed-test/
 
 ### 📐 High-Level Architecture
 
-![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/vd-speed-test-architecture.svg)
+![Architecture Diagram](https://raw.githubusercontent.com/varadharajaan/internet-speed-tester/main/images/vd-speed-test-architecture.svg)
 
 *Complete system architecture showing data flow from local collector to AWS services*
 
