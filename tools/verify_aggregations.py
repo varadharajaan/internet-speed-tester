@@ -20,16 +20,20 @@ import json
 import datetime
 import boto3
 import os
+import sys
 import argparse
 import random
 from typing import Dict, List, Tuple, Optional
 import pytz
 
-# Manifest file path (created by backfill_aggregations.py)
-BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "backfill_manifest.json")
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Load config
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+# Manifest file path (in tools folder)
+BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "..", "backfill_manifest.json")
+
+# Load config from parent directory
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 

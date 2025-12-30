@@ -36,14 +36,17 @@ Usage:
     python backfill_aggregations.py --hourly --last 24       # Backfill only last 24 hours
     python backfill_aggregations.py --all --skip-existing    # Skip if already exists in S3
 """
-import json, datetime, boto3, os, argparse
+import json, datetime, boto3, os, argparse, sys
 from collections import Counter
 from statistics import mean
 from calendar import monthrange
 import pytz
 
-# Load config
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Load config from parent directory
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
 
