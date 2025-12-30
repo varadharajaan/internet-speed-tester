@@ -7,7 +7,7 @@ Now includes CloudWatch-compatible JSON logging and local file rotation.
 """
 
 from flask import Flask, render_template, request, jsonify
-import boto3, json, pandas as pd
+import boto3, json, pandas as pd, re
 from botocore.config import Config as BotoConfig
 import pytz, datetime, os, logging, sys
 from functools import wraps
@@ -446,27 +446,57 @@ def log_execution(func):
 # --- S3 Utility Functions -----------------------------------------------------
 @log_execution
 def list_summary_files(host_id=None):
-    """List daily summary files, optionally filtered by host."""
-    if host_id and host_id != "all" and host_id != "_legacy":
-        prefix = f"aggregated/host={host_id}/"
-    else:
-        prefix = "aggregated/"
+    """List daily summary files, optionally filtered by host.
     
+    host_id options:
+    - None or "all": Include all files (global + host-specific), dedupe by date preferring global
+    - "_legacy": Only legacy files (no host= prefix)
+    - specific host: Only that host's files
+    """
     paginator = s3.get_paginator("list_objects_v2")
     files = []
-    for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            key = obj["Key"]
-            # Filter for daily summaries only (contains /day= and ends with .json)
-            if obj["Key"].endswith(".json") and "/day=" in key:
-                # Skip host-prefixed files when loading global view, and vice versa
-                if host_id and host_id != "all":
-                    # We want host-specific, already filtered by prefix
+    files_by_date = {}  # For deduplication: {date: (key, is_global)}
+    
+    if host_id and host_id not in ("all", "_legacy"):
+        # Specific host: only that host's files
+        prefix = f"aggregated/host={host_id}/"
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(".json") and "/day=" in key:
                     files.append(key)
-                elif "host=" not in key:
-                    # Global view: only include non-host-prefixed files
+    elif host_id == "_legacy":
+        # Legacy only: files without host= prefix
+        prefix = "aggregated/"
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(".json") and "/day=" in key and "host=" not in key:
                     files.append(key)
-    log.info(f"Found {len(files)} summary files in {prefix}" + (f" for host={host_id}" if host_id else ""))
+    else:
+        # All hosts (global view): include everything, dedupe by date
+        # Prefer global files over host-specific when both exist for same date
+        prefix = "aggregated/"
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if key.endswith(".json") and "/day=" in key:
+                    # Extract date from key (day=YYYYMMDD)
+                    match = re.search(r'day=(\d{8})', key)
+                    if match:
+                        date_str = match.group(1)
+                        is_global = "host=" not in key
+                        
+                        if date_str not in files_by_date:
+                            files_by_date[date_str] = (key, is_global)
+                        elif is_global and not files_by_date[date_str][1]:
+                            # Prefer global over host-specific
+                            files_by_date[date_str] = (key, is_global)
+                        # If current is host-specific and we already have global, keep global
+        
+        files = [item[0] for item in files_by_date.values()]
+    
+    log.info(f"Found {len(files)} summary files" + (f" for host={host_id}" if host_id else " (all hosts)"))
     return files
 
 @log_execution
