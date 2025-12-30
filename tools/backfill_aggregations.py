@@ -60,8 +60,10 @@ TIMEZONE = pytz.timezone(config.get("timezone", "Asia/Kolkata"))
 
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
-# Manifest file for tracking backfill output
-BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "backfill_manifest.json")
+# Output directory for manifest
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+BACKFILL_MANIFEST_PATH = os.path.join(OUTPUT_DIR, "backfill_manifest.json")
 
 # Global skip-existing flag (set by args)
 SKIP_EXISTING = False

@@ -14,16 +14,16 @@ Write-Host "Triggering weekly aggregation Lambda..." -ForegroundColor Cyan
 aws lambda invoke `
     --function-name vd-speedtest-daily-aggregator-prod `
     --payload file://payload-weekly.json `
-    output-weekly.json
+    output/output-weekly.json
 
 Write-Host ""
-Write-Host "Lambda invoked. Response saved to output-weekly.json" -ForegroundColor Green
+Write-Host "Lambda invoked. Response saved to output/output-weekly.json" -ForegroundColor Green
 Write-Host ""
 
 # Display the response
-if (Test-Path output-weekly.json) {
+if (Test-Path output/output-weekly.json) {
     Write-Host "Lambda Response:" -ForegroundColor Yellow
-    Get-Content output-weekly.json | ConvertFrom-Json | ConvertTo-Json -Depth 10
+    Get-Content output/output-weekly.json | ConvertFrom-Json | ConvertTo-Json -Depth 10
     
     Write-Host ""
     Write-Host "Check CloudWatch Logs for details:" -ForegroundColor Cyan

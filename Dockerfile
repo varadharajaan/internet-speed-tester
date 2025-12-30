@@ -38,7 +38,9 @@ COPY app.py ${LAMBDA_TASK_ROOT}/
 COPY lambda_dashboard.py ${LAMBDA_TASK_ROOT}/
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}/
 COPY lambda_hourly_check.py ${LAMBDA_TASK_ROOT}/
+COPY s3_speed_utils.py ${LAMBDA_TASK_ROOT}/
 COPY config.json ${LAMBDA_TASK_ROOT}/
+COPY shared/ ${LAMBDA_TASK_ROOT}/shared/
 COPY templates/ ${LAMBDA_TASK_ROOT}/templates/
 
 # Clean up any bytecode

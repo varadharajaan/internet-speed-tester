@@ -8,6 +8,7 @@ conda-env/
 __pypackages__/
 *.log
 logs/
+output/
 *.exe.vmoptions
 .conda/*
 stack-outputs.txt

@@ -19,11 +19,11 @@ aws lambda invoke `
     --cli-binary-format raw-in-base64-out `
     --payload "file://$payloadFile" `
     --region ap-south-1 `
-    response-$Mode.json | Out-Null
+    output/response-$Mode.json | Out-Null
 
-if (Test-Path response-$Mode.json) {
+if (Test-Path output/response-$Mode.json) {
     Write-Host "`n=== Response ==="
-    $response = Get-Content response-$Mode.json | ConvertFrom-Json
+    $response = Get-Content output/response-$Mode.json | ConvertFrom-Json
     if ($response.body) {
         $body = $response.body | ConvertFrom-Json
         $body | ConvertTo-Json -Depth 10

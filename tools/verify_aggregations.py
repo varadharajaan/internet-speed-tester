@@ -29,8 +29,8 @@ import pytz
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Manifest file path (in tools folder)
-BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "..", "backfill_manifest.json")
+# Manifest file path (in output folder)
+BACKFILL_MANIFEST_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output", "backfill_manifest.json")
 
 # Load config from parent directory
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
