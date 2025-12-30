@@ -130,7 +130,9 @@ class Config:
             "s3_bucket_yearly": os.environ.get("S3_BUCKET_YEARLY"),
             "aws_region": os.environ.get("AWS_REGION"),
             "log_level": os.environ.get("LOG_LEVEL"),
-            "timezone": os.environ.get("TIMEZONE") or os.environ.get("TZ"),
+            # Note: AWS Lambda sets TZ=:UTC (with colon prefix) which is invalid for pytz
+            # Only use TIMEZONE env var, not TZ
+            "timezone": os.environ.get("TIMEZONE"),
         }
         
         for key, value in env_overrides.items():
