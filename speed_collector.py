@@ -382,6 +382,22 @@ def run_ookla_cli():
 # ===============================
 # AWS UPLOAD
 # ===============================
+def check_minute_bucket_exists(rounded_ist):
+    """Check if data already exists for this minute bucket (duplicate prevention)."""
+    year, month, day, hour, minute = ist_parts(rounded_ist)
+    prefix = f"host={HOST_ID}/year={year}/month={month}/day={day}/hour={hour}/minute={minute}/"
+    
+    try:
+        response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix, MaxKeys=1)
+        exists = response.get('KeyCount', 0) > 0
+        if exists:
+            log.info(f"[{HOST_ID}] Data already exists for minute bucket {minute}, skipping upload")
+        return exists
+    except Exception as e:
+        log.warning(f"Failed to check minute bucket: {e}")
+        return False  # On error, allow upload to proceed
+
+
 def upload_to_s3(rec, source_label, rounded_ist):
     """Upload speed test result to S3 with host-prefixed key structure."""
     year, month, day, hour, minute = ist_parts(rounded_ist)
@@ -402,9 +418,15 @@ def upload_to_s3(rec, source_label, rounded_ist):
 # ===============================
 @log_execution
 def perform_speedtest():
+    rounded_ist = round_to_15min(datetime.datetime.now(TIMEZONE))
+    
+    # Check if data already exists for this minute bucket (prevent duplicates from catch-up runs)
+    if check_minute_bucket_exists(rounded_ist):
+        log.info(f"Skipping speedtest - data already exists for {rounded_ist.strftime('%Y-%m-%d %H:%M')}")
+        return
+    
     connection_type, wifi_name = get_connection_type()
     log.info(f"Detected connection: {connection_type}" + (f" ({wifi_name})" if wifi_name else ""))
-    rounded_ist = round_to_15min(datetime.datetime.now(TIMEZONE))
     try:
         rec_ookla = run_ookla_cli()
         rec_ookla["public_ip"] = get_public_ip()
