@@ -1,129 +1,37 @@
 #!/usr/bin/env python3
-import datetime, json, os, time, subprocess, boto3, pytz, socket, requests, logging, sys
-from logging.handlers import RotatingFileHandler
-from functools import wraps
+import datetime
+import json
+import os
+import time
+import subprocess
+import requests
 import platform
 import re
+import pytz
 
-# ===============================
-# CONFIGURATION FROM config.json
-# ===============================
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-DEFAULT_CONFIG = {
-    "s3_bucket": "vd-speed-test",
-    "s3_bucket_hourly": "vd-speed-test-hourly-prod",
-    "s3_bucket_weekly": "vd-speed-test-weekly-prod",
-    "s3_bucket_monthly": "vd-speed-test-monthly-prod",
-    "s3_bucket_yearly": "vd-speed-test-yearly-prod",
-    "aws_region": "ap-south-1",
-    "timezone": "Asia/Kolkata",
-    "log_level": "INFO",
-    "log_max_bytes": 10485760,
-    "log_backup_count": 5,
-    "speedtest_timeout": 180,
-    "public_ip_api": "https://api.ipify.org"
-}
+# --- Shared module imports ----------------------------------------------------
+from shared import get_config, get_logger, get_s3_client
+from shared.logging import log_execution
 
-# Load config
-config = DEFAULT_CONFIG.copy()
-if os.path.exists(CONFIG_PATH):
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config.update(json.load(f))
-    except Exception as e:
-        print(f"Warning: Failed to load config.json: {e}. Using defaults.")
+# --- Configuration via shared module ------------------------------------------
+config = get_config()
+log = get_logger(__name__)
+s3 = get_s3_client()
 
-# Extract configuration values (speed_collector only uses daily bucket for minute-level data)
-S3_BUCKET = os.getenv("S3_BUCKET", config.get("s3_bucket"))
-AWS_REGION = os.getenv("AWS_REGION", config.get("aws_region"))
-TIMEZONE = pytz.timezone(config.get("timezone"))
+# Convenience aliases
+S3_BUCKET = config.s3_bucket
+TIMEZONE = pytz.timezone(config.timezone)
+SPEEDTEST_TIMEOUT = config.speedtest_timeout
+PUBLIC_IP_API = config.public_ip_api
+
+# Multi-host configuration (from config or env vars)
+HOST_ID = os.getenv("HOST_ID", config.host_id)
+HOST_NAME = os.getenv("HOST_NAME", config.host_name)
+HOST_LOCATION = os.getenv("HOST_LOCATION", config.host_location)
+HOST_ISP = os.getenv("HOST_ISP", config.host_isp)
+
+import socket
 HOSTNAME = socket.gethostname()
-LOG_LEVEL = os.getenv("LOG_LEVEL", config.get("log_level")).upper()
-LOG_FILE_PATH = os.path.join(os.getcwd(), "speedtest.log")
-LOG_MAX_BYTES = config.get("log_max_bytes")
-LOG_BACKUP_COUNT = config.get("log_backup_count")
-SPEEDTEST_TIMEOUT = config.get("speedtest_timeout")
-PUBLIC_IP_API = config.get("public_ip_api")
-
-# Multi-host configuration
-HOST_ID = os.getenv("HOST_ID", config.get("host_id", "default"))
-HOST_NAME = os.getenv("HOST_NAME", config.get("host_name", HOST_ID))
-HOST_LOCATION = os.getenv("HOST_LOCATION", config.get("host_location", ""))
-HOST_ISP = os.getenv("HOST_ISP", config.get("host_isp", ""))
-
-s3 = boto3.client("s3", region_name=AWS_REGION)
-
-# ===============================
-# CUSTOM LOGGER
-# ===============================
-class CustomLogger:
-    def __init__(self, name=__name__, level=LOG_LEVEL):
-        self.logger = logging.getLogger(name)
-        if not self.logger.handlers:
-            formatter = self.JsonFormatter()
-
-            # Always log to console (CloudWatch captures stdout)
-            stream_handler = logging.StreamHandler(sys.stdout)
-            stream_handler.setFormatter(formatter)
-            self.logger.addHandler(stream_handler)
-
-            # Add file logging only for local runs
-            if not self.is_lambda_environment():
-                file_handler = RotatingFileHandler(
-                    LOG_FILE_PATH, maxBytes=LOG_MAX_BYTES,
-                    backupCount=LOG_BACKUP_COUNT, encoding="utf-8"
-                )
-                file_handler.setFormatter(formatter)
-                self.logger.addHandler(file_handler)
-
-        self.logger.setLevel(level)
-        self.logger.propagate = False
-
-    class JsonFormatter(logging.Formatter):
-        def format(self, record):
-            entry = {
-                "timestamp": datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %I:%M:%S %p IST"),
-                #"timestamp": datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S IST"),
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "function": record.funcName,
-                "module": record.module,
-                "hostname": HOSTNAME,
-            }
-            if record.exc_info:
-                entry["error"] = self.formatException(record.exc_info)
-            return json.dumps(entry)
-
-    @staticmethod
-    def is_lambda_environment():
-        return "AWS_LAMBDA_FUNCTION_NAME" in os.environ
-
-    def debug(self, msg, *args): self.logger.debug(msg, *args)
-    def info(self, msg, *args): self.logger.info(msg, *args)
-    def warning(self, msg, *args): self.logger.warning(msg, *args)
-    def error(self, msg, *args): self.logger.error(msg, *args)
-    def exception(self, msg, *args): self.logger.exception(msg, *args)
-
-log = CustomLogger(__name__)
-
-# ===============================
-# DECORATOR: LOG EXECUTION
-# ===============================
-def log_execution(func):
-    """Decorator to log start, success, and failure of scheduled tasks."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        log.info(f"Starting scheduled task: {func.__name__}")
-        start_time = time.time()
-        try:
-            result = func(*args, **kwargs)
-            duration = round(time.time() - start_time, 2)
-            log.info(f"Task {func.__name__} completed in {duration}s")
-            return result
-        except Exception as e:
-            log.exception(f"Task {func.__name__} failed: {e}")
-            raise
-    return wrapper
 
 # ===============================
 # UTILITIES

@@ -17,4 +17,3 @@ stack-outputs.txt
 .pytest_cache/
 *.vmoptions
 *.lock
-
