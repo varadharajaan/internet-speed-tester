@@ -16,4 +16,5 @@ stack-outputs.txt
 .mypy_cache/
 .pytest_cache/
 *.vmoptions
+*.lock
 
