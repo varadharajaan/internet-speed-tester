@@ -163,8 +163,71 @@ aws s3 ls s3://vd-speed-test-monthly-prod/aggregated/ --recursive
 - **Use `async=1`** for instant page load with progressive data loading
 - **Adjust the "Expected Speed"** threshold per view for different standards
 
+## �️ Developer Tools
+
+### Tail Lambda Logs
+Monitor Lambda function logs in real-time:
+```bash
+# Tail dashboard logs (default)
+python tail_logs.py
+
+# Tail specific Lambda
+python tail_logs.py --lambda dashboard    # Dashboard Lambda
+python tail_logs.py --lambda daily        # Daily aggregator
+python tail_logs.py --lambda hourly       # Hourly checker
+python tail_logs.py --lambda all          # All Lambdas
+
+# Control time range
+python tail_logs.py --since 30m           # Last 30 minutes
+python tail_logs.py --since 1h            # Last 1 hour
+python tail_logs.py --since 2d            # Last 2 days
+
+# One-shot (no follow)
+python tail_logs.py --since 10m --no-follow
+```
+
+### Check Latest Data
+View speed test data from S3 with multi-period support:
+```bash
+# Latest entries
+python check_latest.py                    # Last 5 minute entries
+python check_latest.py --last 10          # Last 10 entries
+
+# By period
+python check_latest.py --period daily --last 7     # Last 7 days
+python check_latest.py --period weekly --last 4    # Last 4 weeks
+python check_latest.py --period monthly --last 12  # Last 12 months
+python check_latest.py --period hourly --last 24   # Last 24 hours
+python check_latest.py --period yearly             # Yearly data
+```
+
+### Cleanup Duplicates
+Find and remove duplicate entries caused by Task Scheduler catch-up runs:
+```bash
+# Scan for duplicates (dry-run)
+python cleanup_duplicates.py                       # Minutes bucket (default)
+python cleanup_duplicates.py --period all          # All buckets
+python cleanup_duplicates.py --period hourly       # Hourly bucket
+python cleanup_duplicates.py --last 100            # Last 100 files only
+
+# Delete duplicates
+python cleanup_duplicates.py --delete              # Delete from minutes
+python cleanup_duplicates.py --period all --delete # Delete from all buckets
+```
+
+### Shared Utilities (s3_speed_utils.py)
+Reusable module for S3 speed test operations:
+- `S3SpeedConfig` - Centralized bucket and period configuration
+- `S3SpeedClient` - S3 operations (list, get, delete)
+- `PeriodMixin` - CLI argument parsing for `--period` flag
+- `CountMixin` - CLI argument parsing for `--last N` items
+- `DryRunMixin` - CLI argument parsing for `--delete` flag
+- `DuplicateDetector` - Find duplicates across periods
+- `KeyParser` - Parse S3 keys to extract date/time components
+
 ## 📞 Need Help?
 
+- **Tail logs in real-time**: `python tail_logs.py --lambda all --since 30m`
 - Check CloudWatch Logs: `/aws/lambda/vd-speedtest-daily-aggregator-prod`
 - Verify S3 buckets have data: `aws s3 ls s3://vd-speed-test-weekly-prod/aggregated/`
 - Trigger manual aggregation: `curl "https://c5jziahxp5ysapj2ioroeaajfe0qboqs.lambda-url.ap-south-1.on.aws/?mode=weekly"`

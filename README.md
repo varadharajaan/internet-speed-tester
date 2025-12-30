@@ -15,7 +15,7 @@
 |---------|-------------|
 | **📊 Automated Collection** | Runs every 15 minutes, captures Ookla CLI results |
 | **☁️ Serverless Architecture** | 3 AWS Lambda functions with EventBridge scheduling |
-| **�️ Multi-Host Support** | Deploy collectors on multiple machines, view per-host or global stats |
+| **🏠 Multi-Host Support** | Deploy collectors on multiple machines, view per-host or global stats |
 | **🔍 Anomaly Detection** | Automatic detection of performance drops and outages |
 | **📈 Interactive Dashboard** | Real-time visualization with host filtering and advanced filters |
 | **🚨 CloudWatch Integration** | JSON structured logging with pre-built queries |
@@ -23,11 +23,14 @@
 | **🎯 Threshold Monitoring** | Configurable speed expectations with alerts |
 | **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly summaries |
 | **⚡ Async Loading** | Instant page load with `async=1` parameter |
-| **�️ Smart Caching** | 2-minute TTL cache with force refresh option |
+| **🗄️ Smart Caching** | 2-minute TTL cache with force refresh option |
 | **🚀 Parallel Fetches** | ThreadPoolExecutor for fast S3 data loading |
-| **�📊 Advanced Metrics** | Custom CloudWatch metrics with filtering |
+| **📊 Advanced Metrics** | Custom CloudWatch metrics with filtering |
 | **⚠️ Smart Alarms** | Multi-level alerting with SNS notifications |
 | **⏰ Hourly Insights** | Automated hourly aggregation with partial data support |
+| **🔒 Duplicate Prevention** | S3 check before upload prevents Task Scheduler catch-up duplicates |
+| **🛠️ Developer Tools** | Lambda log tailing, multi-period data viewer, duplicate cleanup |
+| **📦 Modular Utilities** | Reusable S3 utilities (s3_speed_utils.py) with CLI mixins |
 
 ---
 
@@ -36,7 +39,7 @@
 ```
 vd-speed-test/
 ├── 🖥️ LOCAL COLLECTOR
-│   ├── speed_collector.py            # 15-min speed test runner
+│   ├── speed_collector.py            # 15-min speed test runner (with duplicate prevention)
 │   ├── speedtest.exe                 # Ookla CLI for Windows
 │   └── speed_collector_autostart.xml # Windows Task Scheduler config
 │
@@ -49,6 +52,12 @@ vd-speed-test/
 │   ├── app.py                        # Flask application
 │   ├── templates/dashboard.html      # Interactive UI
 │   └── config.json                   # Speed thresholds
+│
+├── 🛠️ DEVELOPER TOOLS
+│   ├── tail_logs.py                  # Real-time Lambda log tailing
+│   ├── check_latest.py               # Multi-period S3 data viewer
+│   ├── cleanup_duplicates.py         # Duplicate entry cleanup tool
+│   └── s3_speed_utils.py             # Shared utilities module
 │
 ├── 🚀 DEPLOYMENT
 │   ├── template.yaml                 # SAM template with CloudWatch
@@ -1060,7 +1069,87 @@ For local data collection on Windows:
 
 ---
 
-## 🛠️ Troubleshooting
+## 🛠️ Developer Tools
+
+### Lambda Log Tailing (`tail_logs.py`)
+Real-time monitoring of AWS Lambda logs with color-coded output:
+
+```bash
+# Default: dashboard logs
+python tail_logs.py
+
+# Tail specific Lambda
+python tail_logs.py --lambda dashboard    # Dashboard Lambda
+python tail_logs.py --lambda daily        # Daily aggregator
+python tail_logs.py --lambda hourly       # Hourly checker  
+python tail_logs.py --lambda all          # All Lambdas combined
+
+# Time range options
+python tail_logs.py --since 5m            # Last 5 minutes (default)
+python tail_logs.py --since 30m           # Last 30 minutes
+python tail_logs.py --since 1h            # Last 1 hour
+python tail_logs.py --since 2d            # Last 2 days
+
+# One-shot mode (fetch and exit)
+python tail_logs.py --since 10m --no-follow
+```
+
+### S3 Data Viewer (`check_latest.py`)
+View speed test data from any period/bucket:
+
+```bash
+# Raw minute data (default)
+python check_latest.py                    # Last 5 entries
+python check_latest.py --last 10          # Last 10 entries
+
+# Aggregated data by period
+python check_latest.py --period hourly --last 24    # Last 24 hours
+python check_latest.py --period daily --last 7      # Last 7 days
+python check_latest.py --period weekly --last 4     # Last 4 weeks
+python check_latest.py --period monthly --last 12   # Last 12 months
+python check_latest.py --period yearly              # All yearly data
+```
+
+### Duplicate Cleanup (`cleanup_duplicates.py`)
+Find and remove duplicate entries from S3:
+
+```bash
+# Scan for duplicates (dry-run)
+python cleanup_duplicates.py                       # Minutes bucket (default)
+python cleanup_duplicates.py --period all          # All buckets
+python cleanup_duplicates.py --period hourly       # Hourly bucket only
+python cleanup_duplicates.py --last 100            # Last 100 files only
+
+# Actually delete duplicates
+python cleanup_duplicates.py --delete              # Minutes bucket
+python cleanup_duplicates.py --period all --delete # All buckets
+```
+
+### Shared Utilities (`s3_speed_utils.py`)
+Reusable module for S3 speed test operations:
+
+| Class/Mixin | Purpose |
+|-------------|---------|
+| `S3SpeedConfig` | Centralized bucket/period configuration |
+| `S3SpeedClient` | S3 operations (list, get, delete) |
+| `PeriodMixin` | CLI `--period` argument parsing |
+| `CountMixin` | CLI `--last N` argument parsing |
+| `DryRunMixin` | CLI `--delete` argument parsing |
+| `DuplicateDetector` | Find duplicates across periods |
+| `KeyParser` | Parse S3 keys to extract date/time |
+
+Usage in custom tools:
+```python
+from s3_speed_utils import S3SpeedClient, PeriodMixin, CountMixin
+
+class MyTool(PeriodMixin, CountMixin):
+    def __init__(self):
+        self.client = S3SpeedClient()
+```
+
+---
+
+## 🔧 Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -1079,11 +1168,15 @@ For local data collection on Windows:
 | **Hourly aggregation not working** | Check EventBridge rule at :10, verify hourly bucket exists, check Lambda logs |
 | **Dashboard mode dropdown issues** | Ensure all 6 modes exist, check S3 bucket access, verify app.py routes |
 | **Partial hourly data warnings** | Normal behavior - aggregation works with 1-4 files, no action needed |
+| **Duplicate data entries** | Run `python cleanup_duplicates.py --period all --delete` |
 
 ### 🔍 Debug Commands
 
 ```bash
-# Check Lambda logs in real-time
+# Real-time Lambda logs (recommended)
+python tail_logs.py --lambda all --since 30m
+
+# Legacy: SAM logs (alternative)
 sam logs -n vd-speedtest-daily-aggregator-prod --tail
 
 # Test aggregations locally (if you have local copies)

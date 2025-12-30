@@ -454,3 +454,115 @@ For instant page load with progressive data:
 # Force refresh cache with async
 /?mode=daily&days=30&async=1&force_refresh=1
 ```
+
+## 🛠️ Developer Tools
+
+### Lambda Log Tailing (`tail_logs.py`)
+
+Real-time CloudWatch log monitoring for all Lambda functions:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    tail_logs.py                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Lambdas Available:                                          │
+│  • dashboard  - /aws/lambda/vd-speedtest-dashboard-prod     │
+│  • daily      - /aws/lambda/vd-speedtest-daily-aggregator   │
+│  • hourly     - /aws/lambda/vd-speedtest-hourly-checker     │
+│  • all        - All three combined                          │
+│                                                               │
+│  Features:                                                   │
+│  • Color-coded output (Red=error, Yellow=warn, Green=info) │
+│  • Filters START/END/REPORT noise                           │
+│  • Follow mode (live) or one-shot mode                      │
+│  • Configurable time range (5m, 30m, 1h, 2d)               │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Usage:**
+```bash
+python tail_logs.py                          # Dashboard logs (default)
+python tail_logs.py --lambda all --since 30m # All Lambdas, last 30 min
+python tail_logs.py --lambda daily --no-follow # One-shot mode
+```
+
+### S3 Data Viewer (`check_latest.py`)
+
+View speed test data from any period/bucket:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    check_latest.py                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Periods Supported:                                          │
+│  • latest   - Most recent entry                             │
+│  • minutes  - Raw 15-minute data                            │
+│  • hourly   - Hourly aggregations                           │
+│  • daily    - Daily aggregations                            │
+│  • weekly   - Weekly aggregations                           │
+│  • monthly  - Monthly aggregations                          │
+│  • yearly   - Yearly aggregations                           │
+│                                                               │
+│  Options:                                                    │
+│  • --period <period>  Select data period                    │
+│  • --last <N>         Limit to last N entries               │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Duplicate Cleanup (`cleanup_duplicates.py`)
+
+Find and remove duplicate entries caused by Task Scheduler catch-up:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Duplicate Detection                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Problem:                                                    │
+│  Task Scheduler with StartWhenAvailable=true can trigger    │
+│  catch-up runs, creating duplicate entries in the same      │
+│  15-minute bucket.                                           │
+│                                                               │
+│  Solution:                                                   │
+│  1. Disable StartWhenAvailable in Task Scheduler           │
+│  2. speed_collector.py now checks S3 before upload         │
+│  3. Use cleanup_duplicates.py to remove existing duplicates│
+│                                                               │
+│  Usage:                                                      │
+│  • python cleanup_duplicates.py --period all    # Scan all  │
+│  • python cleanup_duplicates.py --delete        # Delete    │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Shared Utilities (`s3_speed_utils.py`)
+
+Modular utilities for building S3 speed test tools:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    s3_speed_utils.py                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Classes:                                                    │
+│  • S3SpeedConfig   - Bucket/period configuration            │
+│  • S3SpeedClient   - S3 operations (list, get, delete)      │
+│  • KeyParser       - Parse S3 keys for date/time            │
+│  • DuplicateDetector - Find duplicates across periods       │
+│                                                               │
+│  CLI Mixins:                                                 │
+│  • PeriodMixin     - --period argument (daily, weekly, etc) │
+│  • CountMixin      - --last N argument                      │
+│  • DryRunMixin     - --delete flag (dry-run by default)     │
+│                                                               │
+│  Example Usage:                                              │
+│  class MyTool(PeriodMixin, CountMixin):                     │
+│      def __init__(self):                                     │
+│          self.client = S3SpeedClient()                       │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
