@@ -1,6 +1,10 @@
 # Trigger Monthly Aggregation Lambda
 # This script manually invokes the Lambda function to create monthly aggregated data
 
+# Get project root (parent of scripts folder)
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $ProjectRoot
+
 Write-Host "🔄 Triggering monthly aggregation Lambda..." -ForegroundColor Cyan
 
 # Create payload file
@@ -25,3 +29,5 @@ if (Test-Path output-monthly.json) {
     Write-Host "💡 Check CloudWatch Logs for details:" -ForegroundColor Cyan
     Write-Host "   aws logs tail /aws/lambda/vd-speedtest-daily-aggregator-prod --follow" -ForegroundColor Gray
 }
+
+Pop-Location

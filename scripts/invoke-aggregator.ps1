@@ -6,6 +6,10 @@ param(
     [string]$Mode
 )
 
+# Get project root (parent of scripts folder)
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $ProjectRoot
+
 $payloadFile = "payload-$Mode.json"
 "{`"mode`":`"$Mode`"}" | Out-File -Encoding ASCII -NoNewline $payloadFile
 
@@ -29,3 +33,4 @@ if (Test-Path response-$Mode.json) {
 }
 
 Remove-Item $payloadFile -ErrorAction SilentlyContinue
+Pop-Location

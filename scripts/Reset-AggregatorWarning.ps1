@@ -3,6 +3,10 @@
 # Forces vd-speedtest-aggregator-warnings-prod alarm to OK
 # -------------------------------------------------------------
 
+# Get project root (parent of scripts folder)
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $ProjectRoot
+
 Write-Host "Invoking vd-speedtest-daily-aggregator-prod Lambda..."
 aws lambda invoke --function-name "vd-speedtest-daily-aggregator-prod" "output.json" | Out-Null
 Write-Host "Lambda invoked successfully."
@@ -31,3 +35,5 @@ Write-Host "Alarm state set to OK."
 
 Start-Sleep -Seconds 3
 Write-Host "`n✅ Alarm vd-speedtest-aggregator-warnings-prod should now show as OK in CloudWatch."
+
+Pop-Location
