@@ -7,6 +7,7 @@ __pycache__/
 conda-env/
 __pypackages__/
 *.log
+logs/
 *.exe.vmoptions
 .conda/*
 stack-outputs.txt

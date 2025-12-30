@@ -23,10 +23,20 @@ from logging.handlers import RotatingFileHandler
 from typing import Callable, Optional
 
 from .config import get_config
+from pathlib import Path
 
 
 # Cache hostname for performance
 _HOSTNAME = socket.gethostname()
+
+# Logs folder (created automatically)
+_LOGS_DIR = Path(__file__).parent.parent / "logs"
+
+
+def _ensure_logs_dir() -> Path:
+    """Ensure logs directory exists and return its path."""
+    _LOGS_DIR.mkdir(exist_ok=True)
+    return _LOGS_DIR
 
 
 def is_lambda_environment() -> bool:
@@ -99,9 +109,11 @@ class CustomLogger:
             
             # File handler (only for local development)
             if not is_lambda_environment():
-                log_file = log_file or f"{name.split('.')[-1]}.log"
+                logs_dir = _ensure_logs_dir()
+                log_filename = log_file or f"{name.split('.')[-1]}.log"
+                log_path = logs_dir / log_filename
                 file_handler = RotatingFileHandler(
-                    log_file,
+                    str(log_path),
                     maxBytes=config.log_max_bytes,
                     backupCount=config.log_backup_count,
                     encoding="utf-8",
