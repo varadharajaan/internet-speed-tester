@@ -974,12 +974,7 @@ def detect_anomalies(df):
     df["ping_anomaly"] = df["ping_avg"] > (1.5 * ping_mean)
     
     # Connection-aware threshold anomalies
-    connection_thresholds = config.get("connection_type_thresholds", {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    })
+    connection_thresholds = config.connection_type_thresholds
     
     tolerance = TOLERANCE_PERCENT / 100.0
     
@@ -1043,7 +1038,7 @@ def dashboard():
             min_ping="", max_ping="", connection_type="", isp="",
             default_threshold=DEFAULT_THRESHOLD,
             tolerance_percent=TOLERANCE_PERCENT,
-            connection_type_thresholds=config.get("connection_type_thresholds", {}),
+            connection_type_thresholds=config.connection_type_thresholds,
             mode=mode,
             available_hosts=available_hosts,
             selected_host=host_id
@@ -1416,12 +1411,7 @@ def dashboard():
         df = df.sort_values("date_ist", ascending=False)
     
     # Get connection type thresholds from config
-    connection_type_thresholds = config.get("connection_type_thresholds", {
-        "Wi-Fi 5GHz": 200,
-        "Wi-Fi 2.4GHz": 100,
-        "Ethernet": 200,
-        "Unknown": 150
-    })
+    connection_type_thresholds = config.connection_type_thresholds
     
     return render_template(
         "dashboard_modern.html",
