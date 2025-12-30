@@ -7,8 +7,6 @@ __pycache__/
 conda-env/
 __pypackages__/
 *.log
-logs/
-output/
 *.exe.vmoptions
 .conda/*
 stack-outputs.txt
@@ -19,3 +17,4 @@ stack-outputs.txt
 .pytest_cache/
 *.vmoptions
 *.lock
+output/*
