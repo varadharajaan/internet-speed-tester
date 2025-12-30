@@ -2,12 +2,16 @@
 import datetime
 import json
 import os
+import sys
 import time
 import subprocess
 import requests
 import platform
 import re
 import pytz
+
+# Add parent directory to path for shared module imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # --- Shared module imports ----------------------------------------------------
 from shared import get_config, get_logger, get_s3_client

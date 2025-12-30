@@ -64,8 +64,8 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Windows\System32\wscript.exe</Command>
-      <Arguments>"C:\vd-speed-test\run_speed_collector.vbs"</Arguments>
-      <WorkingDirectory>C:\vd-speed-test</WorkingDirectory>
+      <Arguments>"C:\vd-speed-test\agent\run_speed_collector.vbs"</Arguments>
+      <WorkingDirectory>C:\vd-speed-test\agent</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
