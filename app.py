@@ -1002,6 +1002,9 @@ def detect_anomalies(df):
 @app.route("/dashboard", methods=["GET", "POST"])
 @log_execution
 def dashboard():
+    import time
+    start_time = time.time()
+    
     # Primary controls from GET parameters (mode, days, host)
     mode = request.args.get("mode", "daily")
     days_param = int(request.args.get("days", 7))
@@ -1022,6 +1025,7 @@ def dashboard():
     # ASYNC MODE: Return skeleton template immediately, JS will fetch data
     if async_mode:
         log.info(f"Async mode: returning skeleton for mode={mode}, days={days_param}, host={host_id}, theme={theme}")
+        load_time = round((time.time() - start_time) * 1000, 1)  # ms
         return render_template(
             template_name,
             async_mode=True,
@@ -1046,7 +1050,8 @@ def dashboard():
             connection_type_thresholds=config.connection_type_thresholds,
             mode=mode,
             available_hosts=available_hosts,
-            selected_host=host_id
+            selected_host=host_id,
+            load_time_ms=load_time
         )
 
     # Convert days parameter to appropriate units based on mode
@@ -1418,6 +1423,9 @@ def dashboard():
     # Get connection type thresholds from config
     connection_type_thresholds = config.connection_type_thresholds
     
+    # Calculate load time
+    load_time = round((time.time() - start_time) * 1000, 1)  # ms
+    
     return render_template(
         template_name,
         data=df.to_dict(orient="records"),
@@ -1450,7 +1458,8 @@ def dashboard():
         connection_type_thresholds=connection_type_thresholds,
         mode=mode,
         available_hosts=available_hosts,
-        selected_host=host_id
+        selected_host=host_id,
+        load_time_ms=load_time
     )
 
 @app.route("/api/data")
