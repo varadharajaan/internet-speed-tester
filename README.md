@@ -15,7 +15,8 @@
 
 | Dashboard | URL |
 |-----------|-----|
-| **📊 Main Dashboard** | [https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/) |
+| **📊 Modern Dashboard** | [https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/) |
+| **🎨 Classic Dashboard** | [Dashboard with classic theme](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/?theme=classic) |
 | **⚡ Async Mode** | [Dashboard with async loading](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/?async=1) |
 
 ---
@@ -29,9 +30,10 @@
 | **🏠 Multi-Host Support** | Deploy collectors on multiple machines, view per-host or global stats |
 | **🔍 Anomaly Detection** | Automatic detection of performance drops and outages |
 | **📈 Interactive Dashboard** | Real-time visualization with host filtering and advanced filters |
+| **🎨 Dual Theme UI** | Modern (Tailwind + ECharts) and Classic (Bootstrap + Chart.js) themes |
 | **🚨 CloudWatch Integration** | JSON structured logging with pre-built queries |
 | **📱 Mobile Responsive** | Access dashboard from any device |
-| **🎯 Threshold Monitoring** | Configurable speed expectations with alerts |
+| **🎯 Threshold Monitoring** | Configurable speed expectations with per-connection thresholds |
 | **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly summaries |
 | **⚡ Async Loading** | Instant page load with `async=1` parameter |
 | **🗄️ Smart Caching** | 2-minute TTL cache with force refresh option |
@@ -42,6 +44,7 @@
 | **🔒 Duplicate Prevention** | S3 check before upload prevents Task Scheduler catch-up duplicates |
 | **🛠️ Developer Tools** | Lambda log tailing, multi-period data viewer, duplicate cleanup |
 | **📦 Modular Utilities** | Reusable S3 utilities (s3_speed_utils.py) with CLI mixins |
+| **⏱️ Load Time Display** | Toast notification showing page render time |
 
 ---
 
@@ -62,7 +65,9 @@ vd-speed-test/
 │
 ├── 🌐 WEB DASHBOARD
 │   ├── app.py                        # Flask application
-│   ├── templates/dashboard.html      # Interactive UI
+│   ├── templates/
+│   │   ├── dashboard_modern.html     # Modern UI (Tailwind + ECharts)
+│   │   └── dashboard.html            # Classic UI (Bootstrap + Chart.js)
 │   └── config.json                   # Speed thresholds
 │
 ├── 🛠️ DEVELOPER TOOLS (tools/)
@@ -316,11 +321,15 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 
 | Feature | Description | How to Access |
 |---------|-------------|---------------|
+| **🎨 Dual Theme UI** | Modern (Tailwind + ECharts) & Classic (Bootstrap + Chart.js) themes | `?theme=classic` or `?theme=modern` |
+| **⏱️ Load Time Display** | Toast notification showing page render time (ms/s/min) | Auto-displayed on page load |
+| **🎯 Per-Connection Thresholds** | Different speed targets per connection type (100/200 Mbps) | Performance by Connection chart |
+| **🏠 Host Filtering** | Filter data by collector hostname | Dashboard host dropdown |
 | **🔄 Multi-Level Aggregation** | Hourly, Daily, Weekly, Monthly, Yearly roll-ups | EventBridge schedules in AWS Console |
 | **📊 Advanced Metrics** | 8+ custom CloudWatch metrics | CloudWatch → Metrics → `vd-speed-test/Logs` |
 | **🔍 Query Definitions** | 4 pre-built Logs Insights queries | CloudWatch → Logs Insights → Saved queries |
 | **⚠️ Smart Alarms** | 7 configured alarms with SNS | CloudWatch → Alarms → vd-speedtest-* |
-| **📈 Dual Dashboards** | Main + Performance dashboards | CloudWatch → Dashboards |
+| **📈 Dual CloudWatch Dashboards** | Main + Performance dashboards | CloudWatch → Dashboards |
 | **📧 Email Notifications** | Automatic alarm emails via SNS | Check your email inbox |
 | **🗂️ Separate S3 Buckets** | Dedicated buckets per aggregation level | S3 Console → vd-speed-test-* |
 | **⚙️ Configurable Schedules** | Customize via template parameters | SAM template → Parameters |
@@ -332,6 +341,22 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 
 ## 📊 Enhanced Dashboard Features
 
+### 🎨 Dashboard Themes
+
+The dashboard supports two themes with full feature parity:
+
+| Theme | Technology Stack | Switch URL Parameter |
+|-------|-----------------|----------------------|
+| **Modern** (Default) | Tailwind CSS + ECharts | `?theme=modern` |
+| **Classic** | Bootstrap + Chart.js | `?theme=classic` |
+
+**Theme Features**:
+- 🔄 One-click theme switching via button in the dashboard header
+- ✅ Both themes support all filtering, host selection, and view modes
+- 🎯 Per-connection threshold colors (100 Mbps for 2.4GHz, 200 Mbps for 5GHz/Ethernet)
+- ⏱️ Load time toast notification showing page render time
+- 📊 Connection type performance breakdown with CIDR ranges
+
 ### 🔍 Advanced Filtering System
 
 | Filter Type | Description | Example |
@@ -341,14 +366,16 @@ https://console.aws.amazon.com/lambda/home?region=ap-south-1#/functions
 | **Provider Search** | Filter by ISP name | "Airtel", "ACT" |
 | **IP Filtering** | Search by public IP | "223.178.*" |
 | **Quick Filters** | One-click common filters | Below threshold |
+| **Host Filter** | Filter by collector hostname | "DESKTOP-ABC" |
 
 ### 📈 Interactive Visualizations
 
 - **Zoom & Pan**: Mouse wheel zoom on charts
 - **Anomaly Highlighting**: Red markers for issues
-- **Threshold Lines**: Visual speed expectations
+- **Threshold Lines**: Per-connection visual speed expectations (distinct colors)
 - **Responsive Design**: Mobile-optimized UI
 - **Multi-Mode Views**: Switch between 6 different time granularities
+- **Fullscreen Charts**: Click any chart to view in modal
 
 ### 🎯 Dashboard Viewing Modes
 
@@ -879,13 +906,17 @@ aws cloudformation describe-stacks \
 | `/` | GET | Main dashboard UI | `https://[url]/` |
 | `/api/data` | GET | JSON data endpoint | `https://[url]/api/data` |
 | `/?mode=minute&days=7` | GET | 15-minute granularity view | `https://[url]/?mode=minute&days=7` |
-| `/?mode=hourly&days=7` | GET | Hourly aggregation view (NEW) | `https://[url]/?mode=hourly&days=7` |
+| `/?mode=hourly&days=7` | GET | Hourly aggregation view | `https://[url]/?mode=hourly&days=7` |
 | `/?mode=daily&days=30` | GET | Daily aggregation view | `https://[url]/?mode=daily&days=30` |
 | `/?mode=weekly&days=90` | GET | Weekly aggregation view | `https://[url]/?mode=weekly&days=90` |
 | `/?mode=monthly&days=180` | GET | Monthly aggregation view | `https://[url]/?mode=monthly&days=180` |
 | `/?mode=yearly&days=360` | GET | Yearly aggregation view | `https://[url]/?mode=yearly&days=360` |
+| `/?theme=classic` | GET | Switch to classic theme | `https://[url]/?theme=classic` |
+| `/?theme=modern` | GET | Switch to modern theme | `https://[url]/?theme=modern` |
+| `/?host=DESKTOP-ABC` | GET | Filter by host | `https://[url]/?host=DESKTOP-ABC` |
 | `/?threshold=150` | GET | Custom threshold view | `https://[url]/?threshold=150` |
 | `/?date=2025-01-25` | GET | Specific date view | `https://[url]/?date=2025-01-25` |
+| `/?refresh=1` | GET | Force cache bypass | `https://[url]/?refresh=1` |
 
 ### 🔄 Aggregator Function
 
