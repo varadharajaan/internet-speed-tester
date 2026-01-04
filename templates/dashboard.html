@@ -221,11 +221,25 @@
   {% if load_time_ms %}
   <div id="loadTimeToast" style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; background: linear-gradient(135deg, #374151, #1f2937); color: white; padding: 10px 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 13px; display: flex; align-items: center; gap: 8px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease;">
     <span class="material-icons" style="font-size: 16px; color: #4ade80;">bolt</span>
-    <span>⚡ Loaded in <strong>{{ load_time_ms }} ms</strong></span>
+    <span>⚡ Loaded in <strong id="loadTimeValue"></strong></span>
   </div>
   <script>
     (function() {
-      const toast = document.getElementById('loadTimeToast');
+      var toast = document.getElementById('loadTimeToast');
+      var loadTimeValue = document.getElementById('loadTimeValue');
+      var ms = {{ load_time_ms }};
+      
+      // Format time based on magnitude
+      var formatted;
+      if (ms >= 60000) {
+        formatted = (ms / 60000).toFixed(1) + ' min';
+      } else if (ms >= 1000) {
+        formatted = (ms / 1000).toFixed(2) + ' s';
+      } else {
+        formatted = ms.toFixed(0) + ' ms';
+      }
+      loadTimeValue.textContent = formatted;
+      
       if (toast) {
         // Show toast
         setTimeout(function() {
