@@ -340,6 +340,15 @@
                         </svg>
                         <span>Refresh</span>
                     </button>
+                    <!-- Switch to Classic Theme Button -->
+                    <button onclick="switchToClassic()" 
+                            class="flex items-center space-x-1 bg-amber-500/80 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105"
+                            title="Switch to Classic Dashboard">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"/>
+                        </svg>
+                        <span>Classic</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1421,6 +1430,13 @@
             // Navigate to the refreshed URL
             window.location.href = url.toString();
         }
+
+        // Switch to Classic Theme
+        function switchToClassic() {
+            const url = new URL(window.location.href);
+            url.searchParams.set('theme', 'classic');
+            window.location.href = url.toString();
+        }
         
         // Add spinning animation style
         const style = document.createElement('style');
@@ -1885,7 +1901,7 @@
                             silent: true,
                             symbol: 'none',
                             lineStyle: {
-                                color: '#10b981',
+                                color: '#f59e0b',  // Amber - distinct from ping line
                                 type: 'solid',
                                 width: 2,
                                 opacity: 0.8
@@ -1894,7 +1910,7 @@
                                 show: true,
                                 position: 'insideEndTop',
                                 formatter: '< 15ms',
-                                color: '#10b981',
+                                color: '#d97706',  // Darker amber for label
                                 fontSize: 11,
                                 fontWeight: 'bold',
                                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -1910,7 +1926,7 @@
                                     type: 'average',
                                     name: 'Avg Ping',
                                     lineStyle: {
-                                        color: '#10b981',
+                                        color: '#f59e0b',  // Amber for average line too
                                         type: 'dashed',
                                         width: 1.5,
                                         opacity: 0.7
@@ -1921,7 +1937,7 @@
                                             return 'Avg: ' + params.value.toFixed(2) + 'ms';
                                         },
                                         position: 'insideEndBottom',
-                                        color: '#10b981',
+                                        color: '#d97706',  // Darker amber for label
                                         fontSize: 10,
                                         fontWeight: 'bold',
                                         backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -2052,30 +2068,40 @@
                             width: 3.5
                         }
                     },
-                    markLine: threshold ? {
-                        silent: true,
-                        symbol: 'none',
-                        lineStyle: {
-                            color: color,
-                            type: 'dashed',
-                            width: 1.5,
-                            opacity: 0.6
-                        },
-                        label: {
-                            show: !isLargeDataset,
-                            formatter: `${threshold}`,
-                            position: 'insideEndTop',
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: 'bold',
-                            backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                            padding: [2, 4],
-                            borderRadius: 3
-                        },
-                        data: [{
-                            yAxis: threshold
-                        }]
-                    } : undefined
+                    // Threshold colors per connection type (distinct from data line colors)
+                    markLine: threshold ? (function() {
+                        const thresholdColors = {
+                            'Wi-Fi 2.4GHz': { line: '#a855f7', label: '#7c3aed' },  // Purple for 100 Mbps
+                            'Wi-Fi 5GHz': { line: '#f59e0b', label: '#d97706' },    // Amber for 200 Mbps
+                            'Ethernet': { line: '#06b6d4', label: '#0891b2' },      // Cyan for 200 Mbps
+                            'Unknown': { line: '#78716c', label: '#57534e' }        // Stone gray
+                        };
+                        const thColors = thresholdColors[conn] || thresholdColors['Unknown'];
+                        return {
+                            silent: true,
+                            symbol: 'none',
+                            lineStyle: {
+                                color: thColors.line,
+                                type: 'dashed',
+                                width: 1.5,
+                                opacity: 0.7
+                            },
+                            label: {
+                                show: !isLargeDataset,
+                                formatter: `${threshold}`,
+                                position: 'insideEndTop',
+                                color: thColors.label,
+                                fontSize: 10,
+                                fontWeight: 'bold',
+                                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                                padding: [2, 4],
+                                borderRadius: 3
+                            },
+                            data: [{
+                                yAxis: threshold
+                            }]
+                        };
+                    })() : undefined
                 });
                 
                 // Upload series - Dotted line for distinction

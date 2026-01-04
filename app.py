@@ -1015,11 +1015,15 @@ def dashboard():
     # Advanced filters from POST body (if any)
     params = request.form if request.method == "POST" else request.args
 
+    # Theme selection: ?theme=classic for old UI, default is modern
+    theme = request.args.get("theme", "modern")
+    template_name = "dashboard.html" if theme == "classic" else "dashboard_modern.html"
+
     # ASYNC MODE: Return skeleton template immediately, JS will fetch data
     if async_mode:
-        log.info(f"Async mode: returning skeleton for mode={mode}, days={days_param}, host={host_id}")
+        log.info(f"Async mode: returning skeleton for mode={mode}, days={days_param}, host={host_id}, theme={theme}")
         return render_template(
-            "dashboard_modern.html",
+            template_name,
             async_mode=True,
             data=[],
             days=days_param,
@@ -1036,6 +1040,7 @@ def dashboard():
             date_from="", date_to="", time_from="", time_to="",
             min_download="", max_download="", min_upload="", max_upload="",
             min_ping="", max_ping="", connection_type="", isp="",
+            threshold=DEFAULT_THRESHOLD,  # For classic dashboard compatibility
             default_threshold=DEFAULT_THRESHOLD,
             tolerance_percent=TOLERANCE_PERCENT,
             connection_type_thresholds=config.connection_type_thresholds,
@@ -1414,7 +1419,7 @@ def dashboard():
     connection_type_thresholds = config.connection_type_thresholds
     
     return render_template(
-        "dashboard_modern.html",
+        template_name,
         data=df.to_dict(orient="records"),
         days=days_param,
         summary=summary,
@@ -1439,6 +1444,7 @@ def dashboard():
         max_ping=params.get("max_ping", ""),
         connection_type=params.get("connection_type", ""),
         isp=params.get("isp", ""),
+        threshold=DEFAULT_THRESHOLD,  # For classic dashboard compatibility
         default_threshold=DEFAULT_THRESHOLD,
         tolerance_percent=TOLERANCE_PERCENT,
         connection_type_thresholds=connection_type_thresholds,

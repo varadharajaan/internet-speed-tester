@@ -219,8 +219,12 @@
 <body>
   <!-- Navigation -->
   <nav class="navbar navbar-dark">
-    <div class="container-fluid px-4">
+    <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
       <span class="navbar-brand mb-0 h1 text-white">Internet Speed Overview</span>
+      <button onclick="switchToModern()" class="btn btn-warning btn-sm d-flex align-items-center gap-1" title="Switch to Modern Dashboard">
+        <span class="material-icons" style="font-size: 18px;">auto_awesome</span>
+        Modern UI
+      </button>
     </div>
   </nav>
 
@@ -230,6 +234,8 @@
     <div class="card filter-panel">
       <h3>Dashboard Controls</h3>
       <form method="GET" id="dashboardForm">
+        <!-- Preserve theme when submitting form -->
+        <input type="hidden" name="theme" value="classic">
         <div class="row g-3 mb-3">
           <div class="col-md-2">
             <label for="mode" class="form-label">Mode</label>
@@ -252,6 +258,19 @@
             <label for="threshold" class="form-label">Expected Speed (Mbps)</label>
             <input type="number" id="threshold" name="threshold" step="1" min="1"
                    value="{{ threshold or default_threshold }}" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-2">
+            <label for="hostSelector" class="form-label">Host</label>
+            <select id="hostSelector" name="host" class="form-select form-select-sm">
+              <option value="" {% if not selected_host %}selected{% endif %}>All Hosts</option>
+              {% if available_hosts %}
+                {% for host in available_hosts %}
+                  {% if host != '_legacy' %}
+                    <option value="{{ host }}" {% if selected_host == host %}selected{% endif %}>{{ host }}</option>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            </select>
           </div>
           <div class="col-md-2 d-flex align-items-end">
             <div class="form-check">
@@ -460,21 +479,63 @@
           <div><code class="small">Format: Name – Host – City (Country)</code></div>
         </div>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-6">
         <div class="card stat-card">
-          <div class="stat-label">Public IP(s) Observed</div>
-          {% if summary.public_ips %}
-            {% for ip in summary.public_ips %}
-              <div style="font-size: 1rem; font-weight: 600; color: #333;">{{ ip }}</div>
-            {% endfor %}
-          {% elif data|length > 0 %}
-            <div style="font-size: 1rem; font-weight: 600; color: #333;">{{ data[-1].public_ip }}</div>
-          {% else %}
-            <div>N/A</div>
+          <div class="stat-label">Public IP(s) Observed ({{ summary.public_ips|length if summary.public_ips else 0 }})</div>
+          <div class="d-flex flex-wrap gap-1 mt-1">
+            {% if summary.public_ips %}
+              {% for ip in summary.public_ips %}
+                <span class="badge bg-primary" style="font-size: 0.75rem; font-weight: 500;">{{ ip }}</span>
+              {% endfor %}
+            {% elif data|length > 0 %}
+              <span class="badge bg-primary" style="font-size: 0.75rem; font-weight: 500;">{{ data[-1].public_ip }}</span>
+            {% else %}
+              <span>N/A</span>
+            {% endif %}
+          </div>
+          {% if summary.cidr_ranges %}
+          <div class="mt-2 pt-2 border-top">
+            <div class="stat-label">CIDR Range(s)</div>
+            <div class="d-flex flex-wrap gap-1 mt-1">
+              {% for cidr_info in summary.cidr_ranges %}
+                <span class="badge bg-info text-dark" style="font-size: 0.7rem;">
+                  {{ cidr_info.cidr }} ({{ cidr_info.count }})
+                </span>
+              {% endfor %}
+            </div>
+          </div>
           {% endif %}
         </div>
       </div>
     </div>
+
+    <!-- Connection Type Performance Stats -->
+    {% if connection_stats %}
+    <div class="row g-3 mb-3">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title mb-3">📡 Connection Type Performance</h5>
+            <div class="row">
+              {% for conn_type, stats in connection_stats.items() %}
+              <div class="col-md-3 mb-2">
+                <div class="p-3 bg-light rounded">
+                  <div class="fw-bold text-primary mb-2">{{ conn_type }}</div>
+                  <div class="small">
+                    <div>📊 Tests: <strong>{{ stats.count }}</strong></div>
+                    <div>⬇️ Avg Download: <strong>{{ "%.1f"|format(stats.avg_download) }} Mbps</strong></div>
+                    <div>⬆️ Avg Upload: <strong>{{ "%.1f"|format(stats.avg_upload) }} Mbps</strong></div>
+                    <div>📶 Avg Ping: <strong>{{ "%.1f"|format(stats.avg_ping) }} ms</strong></div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
     {% endif %}
 
     <!-- Chart Section -->
@@ -605,6 +666,13 @@
   </table>
 
   <script>
+      // Switch to Modern Theme
+      function switchToModern() {
+          const url = new URL(window.location.href);
+          url.searchParams.set('theme', 'modern');
+          window.location.href = url.toString();
+      }
+
       const threshold = {{ threshold|tojson }};
       const tolerancePercent = {{ tolerance_percent|tojson }};
       const currentMode = {{ mode|tojson }};
