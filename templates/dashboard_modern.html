@@ -610,7 +610,7 @@
                     <p class="text-sm font-semibold text-gray-700 break-words">
                         {{ summary.top_server_over_period }}
                     </p>
-                    <p class="text-xs text-gray-500 mt-2">Format: Name – Host – City (Country)</p>
+                    <p class="text-xs text-gray-500 mt-2">Format: Name – Host [– City] (Country)</p>
                 </div>
             </div>
         </div>
@@ -2574,10 +2574,17 @@
             const days = document.getElementById('periodDays').value;
             const host = document.getElementById('hostSelector').value;
             
+            // Get current theme from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const theme = urlParams.get('theme');
+            
             // Build URL with query parameters
             let url = `/dashboard?mode=${mode}&days=${days}`;
             if (host) {
                 url += `&host=${encodeURIComponent(host)}`;
+            }
+            if (theme) {
+                url += `&theme=${encodeURIComponent(theme)}`;
             }
             
             // Navigate to new URL

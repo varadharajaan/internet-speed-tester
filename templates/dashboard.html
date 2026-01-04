@@ -476,7 +476,7 @@
         <div class="card stat-card">
           <div class="stat-label">Most Used Server (period)</div>
           <div style="font-size: 1rem; font-weight: 600; color: #333;">{{ summary.top_server_over_period }}</div>
-          <div><code class="small">Format: Name – Host – City (Country)</code></div>
+          <div><code class="small">Format: Name – Host [– City] (Country)</code></div>
         </div>
       </div>
       <div class="col-md-6">
@@ -523,9 +523,9 @@
                   <div class="fw-bold text-primary mb-2">{{ conn_type }}</div>
                   <div class="small">
                     <div>📊 Tests: <strong>{{ stats.count }}</strong></div>
-                    <div>⬇️ Avg Download: <strong>{{ "%.1f"|format(stats.avg_download) }} Mbps</strong></div>
-                    <div>⬆️ Avg Upload: <strong>{{ "%.1f"|format(stats.avg_upload) }} Mbps</strong></div>
-                    <div>📶 Avg Ping: <strong>{{ "%.1f"|format(stats.avg_ping) }} ms</strong></div>
+                    <div>⬇️ Avg Download: <strong>{{ stats.avg }} Mbps</strong></div>
+                    <div>🎯 Target: <strong>{{ stats.threshold }} Mbps</strong></div>
+                    <div>⚠️ Below Min: <strong>{{ stats.below_min }}</strong> ({{ stats.below_pct }}%)</div>
                   </div>
                 </div>
               </div>
