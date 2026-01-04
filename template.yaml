@@ -214,7 +214,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'vd-speedtest-daily-schedule-${Environment}'
-      Description: Trigger daily aggregation (00:30 UTC)
+      Description: Trigger daily aggregation (06:30 IST / 01:00 UTC)
       ScheduleExpression: !Ref DailyScheduleExpression
       State: ENABLED
       Targets:
@@ -228,7 +228,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'vd-speedtest-weekly-schedule-${Environment}'
-      Description: Trigger weekly aggregation (Tue 02:00 IST)
+      Description: Trigger weekly aggregation (Mon 06:30 IST / 01:00 UTC)
       ScheduleExpression: !Ref WeeklyScheduleExpression
       State: ENABLED
       Targets:
@@ -242,7 +242,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'vd-speedtest-monthly-schedule-${Environment}'
-      Description: Trigger monthly aggregation (1st 02:00 IST)
+      Description: Trigger monthly aggregation (1st 06:30 IST / 01:00 UTC)
       ScheduleExpression: !Ref MonthlyScheduleExpression
       State: ENABLED
       Targets:
@@ -256,7 +256,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub 'vd-speedtest-yearly-schedule-${Environment}'
-      Description: Trigger yearly aggregation (Jan 1 02:00 IST)
+      Description: Trigger yearly aggregation (Jan 1 06:30 IST / 01:00 UTC)
       ScheduleExpression: !Ref YearlyScheduleExpression
       State: ENABLED
       Targets:

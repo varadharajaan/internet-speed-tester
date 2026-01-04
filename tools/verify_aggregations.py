@@ -318,18 +318,34 @@ def validate_yearly(data: Dict, result: ValidationResult) -> None:
 # BUCKET SCANNING
 # ============================================================================
 
-def list_aggregation_files(bucket: str, prefix: str = "aggregated/") -> List[str]:
-    """List all aggregation files in a bucket."""
+def list_aggregation_files(bucket: str, prefix: str = "aggregated/", include_metadata: bool = False) -> List:
+    """List all aggregation files in a bucket.
+    
+    Args:
+        bucket: S3 bucket name
+        prefix: Key prefix to filter
+        include_metadata: If True, return dicts with key and LastModified; else just keys
+    
+    Returns:
+        List of keys (strings) or list of dicts with 'key' and 'LastModified'
+    """
     paginator = s3.get_paginator("list_objects_v2")
-    keys = []
+    results = []
     
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".json"):
-                keys.append(key)
+                if include_metadata:
+                    results.append({
+                        "key": key,
+                        "LastModified": obj.get("LastModified"),
+                        "Size": obj.get("Size", 0)
+                    })
+                else:
+                    results.append(key)
     
-    return keys
+    return results
 
 
 def read_json_from_s3(bucket: str, key: str) -> Tuple[Optional[Dict], Optional[str]]:
@@ -448,7 +464,8 @@ def verify_bucket(
     validator_func,
     level_name: str,
     sample_size: Optional[int] = None,
-    verbose: bool = False
+    verbose: bool = False,
+    show_timestamps: bool = False
 ) -> Dict:
     """Verify all files in a bucket."""
     print(f"\n{'='*60}")
@@ -456,16 +473,17 @@ def verify_bucket(
     print(f"  Bucket: {bucket}")
     print(f"{'='*60}")
     
-    keys = list_aggregation_files(bucket)
-    total_files = len(keys)
+    # Get files with metadata for timestamps
+    file_list = list_aggregation_files(bucket, include_metadata=True)
+    total_files = len(file_list)
     
     if total_files == 0:
         print(f"  WARNING: No files found in bucket!")
-        return {"total": 0, "valid": 0, "invalid": 0, "warnings": 0}
+        return {"total": 0, "valid": 0, "invalid": 0, "warnings": 0, "files": []}
     
     # Sample if requested
     if sample_size and sample_size < total_files:
-        keys = random.sample(keys, sample_size)
+        file_list = random.sample(file_list, sample_size)
         print(f"  Sampling {sample_size} of {total_files} files")
     else:
         print(f"  Checking all {total_files} files")
@@ -474,9 +492,14 @@ def verify_bucket(
     invalid_count = 0
     warning_count = 0
     results: List[ValidationResult] = []
+    file_info_list = []  # Store file info with timestamps
     
-    for key in keys:
+    for file_info in file_list:
+        key = file_info["key"] if isinstance(file_info, dict) else file_info
+        last_modified = file_info.get("LastModified") if isinstance(file_info, dict) else None
+        
         result = ValidationResult(key)
+        result.last_modified = last_modified
         
         # Read and parse
         data, error = read_json_from_s3(bucket, key)
@@ -487,6 +510,12 @@ def verify_bucket(
             validator_func(data, result)
         
         results.append(result)
+        file_info_list.append({
+            "key": key,
+            "last_modified": last_modified,
+            "valid": result.valid,
+            "data": result.data
+        })
         
         if result.valid:
             valid_count += 1
@@ -497,16 +526,19 @@ def verify_bucket(
     
     # Print results
     print(f"\n  Results:")
-    print(f"  [OK]      Valid:    {valid_count}/{len(keys)}")
-    print(f"  [ERROR]   Invalid:  {invalid_count}/{len(keys)}")
-    print(f"  [WARN]    Warnings: {warning_count}/{len(keys)}")
+    print(f"  [OK]      Valid:    {valid_count}/{len(file_list)}")
+    print(f"  [ERROR]   Invalid:  {invalid_count}/{len(file_list)}")
+    print(f"  [WARN]    Warnings: {warning_count}/{len(file_list)}")
     
     # Show details for invalid files
     invalid_results = [r for r in results if not r.valid]
     if invalid_results:
         print(f"\n  Invalid files:")
         for r in invalid_results[:10]:  # Show first 10
-            print(f"    [ERROR] {r.key}")
+            ts_str = ""
+            if hasattr(r, 'last_modified') and r.last_modified:
+                ts_str = f" (Created: {r.last_modified.astimezone(TIMEZONE).strftime('%Y-%m-%d %H:%M')})"
+            print(f"    [ERROR] {r.key}{ts_str}")
             for err in r.errors[:3]:  # Show first 3 errors
                 print(f"       - {err}")
     
@@ -516,7 +548,10 @@ def verify_bucket(
         if warning_results:
             print(f"\n  Files with warnings:")
             for r in warning_results[:10]:
-                print(f"    [WARN] {r.key}")
+                ts_str = ""
+                if hasattr(r, 'last_modified') and r.last_modified:
+                    ts_str = f" (Created: {r.last_modified.astimezone(TIMEZONE).strftime('%Y-%m-%d %H:%M')})"
+                print(f"    [WARN] {r.key}{ts_str}")
                 for warn in r.warnings[:2]:
                     print(f"       - {warn}")
     
@@ -524,15 +559,19 @@ def verify_bucket(
     valid_results = [r for r in results if r.valid and r.data]
     if valid_results and verbose:
         sample = random.choice(valid_results)
-        print(f"\n  Sample valid data from: {sample.key}")
+        ts_str = ""
+        if hasattr(sample, 'last_modified') and sample.last_modified:
+            ts_str = f"\n  Created: {sample.last_modified.astimezone(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S %Z')}"
+        print(f"\n  Sample valid data from: {sample.key}{ts_str}")
         print(f"    {json.dumps(sample.data, indent=4)[:500]}...")
     
     return {
         "total": total_files,
-        "checked": len(keys),
+        "checked": len(file_list),
         "valid": valid_count,
         "invalid": invalid_count,
         "warnings": warning_count,
+        "files": file_info_list,
     }
 
 
@@ -671,6 +710,7 @@ Examples:
     parser.add_argument("--yearly", action="store_true", help="Verify yearly aggregations")
     parser.add_argument("--flow", action="store_true", help="Verify data flow between levels")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed output")
+    parser.add_argument("--timestamps", "-t", action="store_true", help="Show file creation timestamps for all aggregations")
     parser.add_argument("--sample", type=int, help="Number of random samples to check per bucket")
     parser.add_argument("--previous", action="store_true", help="Verify only files from last backfill (reads backfill_manifest.json)")
     
@@ -720,6 +760,7 @@ Examples:
     print(f"  Timestamp: {datetime.datetime.now(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S %Z')}")
     print(f"  Sample size: {args.sample if args.sample else 'all files'}")
     print(f"  Verbose: {args.verbose}")
+    print(f"  Timestamps: {args.timestamps}")
     
     results = {}
     
@@ -755,6 +796,30 @@ Examples:
     
     if args.flow:
         results["flow"] = verify_data_flow(verbose=args.verbose)
+    
+    # Show timestamps if requested
+    if args.timestamps:
+        print("\n" + "=" * 60)
+        print("  AGGREGATION TIMESTAMPS (File Creation Times)")
+        print("=" * 60)
+        print("  Shows when each aggregation file was created/updated.")
+        print("  Use this to verify automatic vs manual (backfill) triggers.\n")
+        
+        for level in ["yearly", "monthly", "weekly", "daily"]:
+            if level in results and "files" in results[level]:
+                print(f"  --- {level.upper()} ---")
+                files = sorted(results[level]["files"], key=lambda x: x["key"], reverse=True)
+                for f in files[:15]:  # Show last 15
+                    key = f["key"]
+                    last_modified = f.get("last_modified")
+                    if last_modified:
+                        ts = last_modified.astimezone(TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        ts = "N/A"
+                    # Extract period from key
+                    period_str = key.split("/")[-2] if "/" in key else key
+                    print(f"    {period_str:<25} Created: {ts}")
+                print()
     
     # Final summary
     print("\n" + "=" * 60)

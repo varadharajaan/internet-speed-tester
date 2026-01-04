@@ -782,21 +782,33 @@ def aggregate_yearly_for_host(current_year, max_month, host_id: str = None):
 
 @log_execution
 def aggregate_yearly():
-    """Aggregate all monthly summaries for the current year (YTD) for all hosts."""
+    """Aggregate all monthly summaries for the previous completed year (triggered Jan 1-7)."""
     now_ist = datetime.datetime.now(TIMEZONE).date()
-    current_year = now_ist.year
+    
+    # When triggered in early January, aggregate the PREVIOUS year (which just completed)
+    # Otherwise aggregate the current year as YTD
+    if now_ist.month == 1 and now_ist.day <= 7:
+        # Early January: aggregate the previous year (2025 when triggered on Jan 1-7 2026)
+        target_year = now_ist.year - 1
+        max_month = 12  # Full year
+        log.info(f"Early January trigger - aggregating previous year: {target_year}")
+    else:
+        # Rest of the year: aggregate current year YTD
+        target_year = now_ist.year
+        max_month = now_ist.month
+        log.info(f"YTD trigger - aggregating current year: {target_year} up to month {max_month}")
     
     # Discover all hosts
     hosts = list_hosts()
     all_results = []
     
     for host_id in hosts:
-        summary = aggregate_yearly_for_host(current_year, now_ist.month, host_id=host_id)
+        summary = aggregate_yearly_for_host(target_year, max_month, host_id=host_id)
         if summary:
             if host_id and host_id != "all" and host_id != "_legacy":
-                key = f"aggregated/host={host_id}/year={current_year}/speed_test_summary.json"
+                key = f"aggregated/host={host_id}/year={target_year}/speed_test_summary.json"
             else:
-                key = f"aggregated/year={current_year}/speed_test_summary.json"
+                key = f"aggregated/year={target_year}/speed_test_summary.json"
             
             s3.put_object(
                 Bucket=S3_BUCKET_YEARLY,
@@ -808,9 +820,9 @@ def aggregate_yearly():
             all_results.append({"host_id": host_id, "months": summary["months_aggregated"], "s3_key": key})
     
     # Global summary
-    global_summary = aggregate_yearly_for_host(current_year, now_ist.month, host_id=None)
+    global_summary = aggregate_yearly_for_host(target_year, max_month, host_id=None)
     if global_summary:
-        global_key = f"aggregated/year={current_year}/speed_test_summary.json"
+        global_key = f"aggregated/year={target_year}/speed_test_summary.json"
         s3.put_object(
             Bucket=S3_BUCKET_YEARLY,
             Key=global_key,
@@ -820,7 +832,7 @@ def aggregate_yearly():
         log.info(f"Global year-to-date summary uploaded to s3://{S3_BUCKET_YEARLY}/{global_key}")
     
     emit_success_event("yearly")
-    return {"year": current_year, "hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
+    return {"year": target_year, "hosts_aggregated": len(hosts), "host_results": all_results, "global_summary": global_summary}
 
 # --- Lambda handler -----------------------------------------------------------
 # ---------------------------------------------------------------------------

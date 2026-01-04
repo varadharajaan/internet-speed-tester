@@ -110,13 +110,22 @@ class SpeedDataViewer(PeriodMixin, CountMixin):
         
         print(f"\n=== {period.upper()} AGGREGATIONS (Last {len(files)}) ===")
         print(f"Averaged data per {period} period:")
-        print(f"\n{'Period':<{time_width}} {'Avg DL':<12} {'Avg UL':<12} {'Avg Ping':<10} {'Samples':<8}")
-        print("-" * (time_width + 44))
+        print(f"\n{'Period':<{time_width}} {'Avg DL':<12} {'Avg UL':<12} {'Avg Ping':<10} {'Samples':<8} {'Created (IST)':<20}")
+        print("-" * (time_width + 64))
         
         for f, f_bucket in files:
             try:
                 data = self.client.get_data(f['Key'], f_bucket)
                 time_str = self.parser.parse_period_key(f['Key'], period)
+                
+                # Get file creation timestamp (LastModified)
+                import pytz
+                last_modified = f.get('LastModified')
+                if last_modified:
+                    ist = pytz.timezone('Asia/Kolkata')
+                    created_str = last_modified.astimezone(ist).strftime('%Y-%m-%d %H:%M')
+                else:
+                    created_str = 'N/A'
                 
                 # Handle different data formats based on period type
                 overall = data.get('overall', {})
@@ -138,7 +147,7 @@ class SpeedDataViewer(PeriodMixin, CountMixin):
                 ul_str = self.parser.format_value(avg_ul, ' Mbps')
                 ping_str = self.parser.format_value(avg_ping, ' ms')
                 
-                print(f"{time_str:<{time_width}} {dl_str:<12} {ul_str:<12} {ping_str:<10} {count_val:<8}")
+                print(f"{time_str:<{time_width}} {dl_str:<12} {ul_str:<12} {ping_str:<10} {count_val:<8} {created_str:<20}")
             except Exception as e:
                 print(f"Error reading {f['Key']}: {e}")
     

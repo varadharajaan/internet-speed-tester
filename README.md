@@ -9,6 +9,17 @@
 
 ---
 
+## 🌐 Live Dashboard
+
+🎉 **Production Deployed!**
+
+| Dashboard | URL |
+|-----------|-----|
+| **📊 Main Dashboard** | [https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/) |
+| **⚡ Async Mode** | [Dashboard with async loading](https://mdgo2zjcr6qgptlbkclrb2hstm0ernrs.lambda-url.ap-south-1.on.aws/?async=1) |
+
+---
+
 ## 🎯 Key Features
 
 | Feature | Description |
